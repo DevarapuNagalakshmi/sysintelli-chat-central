@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Settings, LogOut, Sun, Moon } from 'lucide-react';
+import { Settings, LogOut, Sun, Moon, MessageCircle, Users, Video, Bot } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import ChatPanel from '@/components/ChatPanel';
 import ChannelPanel from '@/components/ChannelPanel';
@@ -98,30 +98,34 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           <Button
             variant={activeTab === 'chats' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('chats')}
-            className="flex-1 mx-1"
+            className="flex-1 mx-1 flex flex-col items-center py-2"
           >
-            Chats
+            <MessageCircle className="h-5 w-5 mb-1" />
+            <span className="text-xs">Chats</span>
           </Button>
           <Button
             variant={activeTab === 'channels' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('channels')}
-            className="flex-1 mx-1"
+            className="flex-1 mx-1 flex flex-col items-center py-2"
           >
-            Channels
+            <Users className="h-5 w-5 mb-1" />
+            <span className="text-xs">Channels</span>
           </Button>
           <Button
             variant={activeTab === 'meetings' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('meetings')}
-            className="flex-1 mx-1"
+            className="flex-1 mx-1 flex flex-col items-center py-2"
           >
-            Meetings
+            <Video className="h-5 w-5 mb-1" />
+            <span className="text-xs">Meetings</span>
           </Button>
           <Button
             variant={activeTab === 'sysintelli' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('sysintelli')}
-            className="flex-1 mx-1"
+            className="flex-1 mx-1 flex flex-col items-center py-2"
           >
-            Sysintelli Chatbot
+            <Bot className="h-5 w-5 mb-1" />
+            <span className="text-xs">Sysintelli</span>
           </Button>
         </div>
       </div>

@@ -20,12 +20,22 @@ interface Channel {
   description: string;
   memberCount: number;
   isAdmin: boolean;
+  members?: User[];
   lastMessage?: {
     id: string;
     sender: string;
     message: string;
     timestamp: Date;
   };
+}
+
+interface Message {
+  id: string;
+  sender: string;
+  senderId: string;
+  message: string;
+  timestamp: Date;
+  channelId: string;
 }
 
 interface ChannelPanelProps {
@@ -35,16 +45,26 @@ interface ChannelPanelProps {
 const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateChannel, setShowCreateChannel] = useState(false);
-  const [showChannelSettings, setShowChannelSettings] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDescription, setNewChannelDescription] = useState('');
+  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
 
   // Mock data - Replace with Supabase integration
   useEffect(() => {
+    const mockUsers: User[] = [
+      { id: '1', name: 'John Doe', email: 'john@company.com', avatar: '' },
+      { id: '2', name: 'Jane Smith', email: 'jane@company.com', avatar: '' },
+      { id: '3', name: 'Mike Johnson', email: 'mike@company.com', avatar: '' },
+      { id: '4', name: 'Sarah Wilson', email: 'sarah@company.com', avatar: '' },
+    ];
+    setAvailableUsers(mockUsers);
+
     const mockChannels: Channel[] = [
       {
         id: '1',
@@ -52,6 +72,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
         description: 'General company discussions',
         memberCount: 25,
         isAdmin: true,
+        members: mockUsers.slice(0, 2),
         lastMessage: {
           id: '1',
           sender: 'John Doe',
@@ -65,6 +86,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
         description: 'Development discussions and updates',
         memberCount: 8,
         isAdmin: false,
+        members: mockUsers.slice(0, 3),
         lastMessage: {
           id: '2',
           sender: 'Jane Smith',
@@ -84,7 +106,8 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
       name: newChannelName,
       description: newChannelDescription,
       memberCount: 1,
-      isAdmin: true
+      isAdmin: true,
+      members: [user]
     };
 
     setChannels(prev => [...prev, newChannel]);
@@ -92,8 +115,57 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
     setNewChannelDescription('');
     setShowCreateChannel(false);
     
-    // Here you would create in Supabase
     console.log('Creating channel in Supabase:', newChannel);
+  };
+
+  const handleAddUsersToChannel = () => {
+    if (!selectedChannel || selectedUsers.length === 0) return;
+
+    const usersToAdd = availableUsers.filter(u => selectedUsers.includes(u.id));
+    
+    setChannels(prev => prev.map(channel => 
+      channel.id === selectedChannel.id 
+        ? {
+            ...channel,
+            members: [...(channel.members || []), ...usersToAdd],
+            memberCount: (channel.members?.length || 0) + usersToAdd.length
+          }
+        : channel
+    ));
+
+    // Update selected channel
+    setSelectedChannel(prev => prev ? {
+      ...prev,
+      members: [...(prev.members || []), ...usersToAdd],
+      memberCount: (prev.members?.length || 0) + usersToAdd.length
+    } : null);
+
+    setSelectedUsers([]);
+    setShowAddUser(false);
+    
+    console.log('Adding users to channel in Supabase:', { channelId: selectedChannel.id, users: usersToAdd });
+  };
+
+  const handleRemoveUserFromChannel = (userId: string) => {
+    if (!selectedChannel) return;
+
+    setChannels(prev => prev.map(channel => 
+      channel.id === selectedChannel.id 
+        ? {
+            ...channel,
+            members: channel.members?.filter(m => m.id !== userId) || [],
+            memberCount: Math.max(0, channel.memberCount - 1)
+          }
+        : channel
+    ));
+
+    setSelectedChannel(prev => prev ? {
+      ...prev,
+      members: prev.members?.filter(m => m.id !== userId) || [],
+      memberCount: Math.max(0, prev.memberCount - 1)
+    } : null);
+
+    console.log('Removing user from channel in Supabase:', { channelId: selectedChannel.id, userId });
   };
 
   const handleCloneChannel = (channel: Channel) => {
@@ -102,7 +174,8 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
       id: Date.now().toString(),
       name: `${channel.name} (Copy)`,
       memberCount: 1,
-      isAdmin: true
+      isAdmin: true,
+      members: [user]
     };
 
     setChannels(prev => [...prev, clonedChannel]);
@@ -112,24 +185,42 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   const handleSendMessage = () => {
     if (!newMessage.trim() || !selectedChannel) return;
 
-    const message = {
+    const message: Message = {
       id: Date.now().toString(),
       sender: user.name,
+      senderId: user.id,
       message: newMessage,
       timestamp: new Date(),
       channelId: selectedChannel.id
     };
 
     setMessages(prev => [...prev, message]);
+    
+    // Update channel's last message
+    setChannels(prev => prev.map(channel => 
+      channel.id === selectedChannel.id 
+        ? {
+            ...channel,
+            lastMessage: {
+              id: message.id,
+              sender: message.sender,
+              message: message.message,
+              timestamp: message.timestamp
+            }
+          }
+        : channel
+    ));
+
     setNewMessage('');
     
-    // Here you would send to Supabase
     console.log('Sending channel message to Supabase:', message);
   };
 
   const filteredChannels = channels.filter(channel => 
     channel.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const channelMessages = messages.filter(msg => msg.channelId === selectedChannel?.id);
 
   return (
     <div className="flex h-full">
@@ -235,12 +326,51 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
               
               {selectedChannel.isAdmin && (
                 <div className="flex space-x-2">
-                  <Button variant="outline" size="sm">
-                    <UserPlus className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <UserMinus className="h-4 w-4" />
-                  </Button>
+                  <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <UserPlus className="h-4 w-4" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Add Users to {selectedChannel.name}</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          {availableUsers
+                            .filter(u => !selectedChannel.members?.some(m => m.id === u.id))
+                            .map((user) => (
+                              <div key={user.id} className="flex items-center space-x-2">
+                                <input
+                                  type="checkbox"
+                                  id={user.id}
+                                  checked={selectedUsers.includes(user.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedUsers(prev => [...prev, user.id]);
+                                    } else {
+                                      setSelectedUsers(prev => prev.filter(id => id !== user.id));
+                                    }
+                                  }}
+                                />
+                                <label htmlFor={user.id} className="flex items-center space-x-2 cursor-pointer">
+                                  <Avatar className="h-6 w-6">
+                                    <AvatarImage src={user.avatar} />
+                                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                  </Avatar>
+                                  <span>{user.name}</span>
+                                </label>
+                              </div>
+                            ))}
+                        </div>
+                        <Button onClick={handleAddUsersToChannel} className="w-full" disabled={selectedUsers.length === 0}>
+                          Add Selected Users
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  
                   <Button 
                     variant="outline" 
                     size="sm"
@@ -257,7 +387,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map((message) => (
+              {channelMessages.map((message) => (
                 <div key={message.id} className="flex items-start space-x-3">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback>{message.sender.charAt(0)}</AvatarFallback>
@@ -268,6 +398,16 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
                       <span className="text-xs text-muted-foreground">
                         {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
+                      {selectedChannel.isAdmin && message.senderId !== user.id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveUserFromChannel(message.senderId)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <UserMinus className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                     <p className="text-sm mt-1">{message.message}</p>
                   </div>

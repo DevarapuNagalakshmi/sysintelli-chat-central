@@ -94,6 +94,13 @@ const ChatbotPanel: React.FC<ChatbotPanelProps> = ({ user }) => {
     }, 1500);
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       <Card className="flex-1 flex flex-col">
@@ -169,11 +176,11 @@ const ChatbotPanel: React.FC<ChatbotPanelProps> = ({ user }) => {
                 placeholder="Ask me about company policies, benefits, procedures..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                onKeyPress={handleKeyPress}
                 className="flex-1"
                 disabled={isTyping}
               />
-              <Button onClick={handleSendMessage} disabled={isTyping}>
+              <Button onClick={handleSendMessage} disabled={isTyping || !newMessage.trim()}>
                 <Send className="h-4 w-4" />
               </Button>
             </div>
