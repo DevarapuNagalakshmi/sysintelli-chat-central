@@ -45,9 +45,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      {/* Top Header */}
-      <div className="flex items-center justify-between p-4 border-b">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
+      {/* Top Header - Fixed height */}
+      <div className="flex items-center justify-between p-4 border-b bg-background z-10 flex-shrink-0">
         <div className="flex items-center space-x-4">
           <div className="flex flex-col space-y-2">
             <Avatar 
@@ -87,45 +87,47 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         </div>
       </div>
 
-      {/* Main Content Area - with padding to avoid taskbar overlap */}
-      <div className="flex-1 overflow-hidden pb-16">
-        {renderContent()}
+      {/* Main Content Area - Flexible height with proper spacing */}
+      <div className="flex-1 overflow-hidden" style={{ paddingBottom: '80px' }}>
+        <div className="h-full overflow-y-auto">
+          {renderContent()}
+        </div>
       </div>
 
-      {/* Bottom Taskbar - Fixed */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-2">
-        <div className="flex justify-around items-center max-w-4xl mx-auto">
+      {/* Bottom Taskbar - Fixed position with proper height */}
+      <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-20" style={{ height: '80px' }}>
+        <div className="flex justify-around items-center h-full max-w-6xl mx-auto px-4">
           <Button
             variant={activeTab === 'chats' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('chats')}
-            className="flex-1 mx-1 flex flex-col items-center py-2"
+            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-14"
           >
-            <MessageCircle className="h-5 w-5 mb-1" />
-            <span className="text-xs">Chats</span>
+            <MessageCircle className="h-6 w-6 mb-1" />
+            <span className="text-xs font-medium">Chats</span>
           </Button>
           <Button
             variant={activeTab === 'channels' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('channels')}
-            className="flex-1 mx-1 flex flex-col items-center py-2"
+            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-14"
           >
-            <Users className="h-5 w-5 mb-1" />
-            <span className="text-xs">Channels</span>
+            <Users className="h-6 w-6 mb-1" />
+            <span className="text-xs font-medium">Channels</span>
           </Button>
           <Button
             variant={activeTab === 'meetings' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('meetings')}
-            className="flex-1 mx-1 flex flex-col items-center py-2"
+            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-14"
           >
-            <Video className="h-5 w-5 mb-1" />
-            <span className="text-xs">Meetings</span>
+            <Video className="h-6 w-6 mb-1" />
+            <span className="text-xs font-medium">Meetings</span>
           </Button>
           <Button
             variant={activeTab === 'sysintelli' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('sysintelli')}
-            className="flex-1 mx-1 flex flex-col items-center py-2"
+            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-14"
           >
-            <Bot className="h-5 w-5 mb-1" />
-            <span className="text-xs">Sysintelli</span>
+            <Bot className="h-6 w-6 mb-1" />
+            <span className="text-xs font-medium">Sysintelli</span>
           </Button>
         </div>
       </div>

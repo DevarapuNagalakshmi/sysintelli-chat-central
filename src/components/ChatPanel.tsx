@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Search } from 'lucide-react';
+import { Send, Search, MessageCircle } from 'lucide-react';
 
 interface User {
   id: string;
@@ -86,10 +85,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
   );
 
   return (
-    <div className="flex h-full">
-      {/* Chat List */}
-      <div className="w-1/3 border-r">
-        <div className="p-4">
+    <div className="h-full flex bg-background p-4">
+      {/* Chat List - Fixed width */}
+      <div className="w-80 border-r bg-card rounded-l-lg flex flex-col">
+        <div className="p-4 border-b">
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
             <Input
@@ -101,12 +100,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
           </div>
         </div>
         
-        <div className="space-y-1">
+        <div className="flex-1 overflow-y-auto">
           {filteredChats.map((chat) => (
             <div
               key={chat.id}
               onClick={() => setSelectedChat(chat)}
-              className={`flex items-center p-3 hover:bg-accent cursor-pointer ${
+              className={`flex items-center p-3 hover:bg-accent cursor-pointer border-b ${
                 selectedChat?.id === chat.id ? 'bg-accent' : ''
               }`}
             >
@@ -120,9 +119,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
                 )}
               </div>
               
-              <div className="ml-3 flex-1">
+              <div className="ml-3 flex-1 min-w-0">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-medium">{chat.user.name}</h3>
+                  <h3 className="font-medium truncate">{chat.user.name}</h3>
                   {chat.lastMessage && (
                     <span className="text-xs text-muted-foreground">
                       {chat.lastMessage.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -134,7 +133,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
                     {chat.lastMessage?.message || 'No messages yet'}
                   </p>
                   {chat.unreadCount > 0 && (
-                    <span className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-1">
+                    <span className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
                       {chat.unreadCount}
                     </span>
                   )}
@@ -145,12 +144,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      {/* Chat Area - Flexible width */}
+      <div className="flex-1 flex flex-col bg-card rounded-r-lg">
         {selectedChat ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b flex items-center">
+            <div className="p-4 border-b flex items-center bg-card rounded-tr-lg">
               <Avatar className="h-10 w-10">
                 <AvatarImage src={selectedChat.user.avatar} />
                 <AvatarFallback>{selectedChat.user.name.charAt(0)}</AvatarFallback>
@@ -164,20 +163,20 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/10">
               {messages.map((message) => (
                 <div
                   key={message.id}
                   className={`flex ${message.sender_id === user.id ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-xs px-4 py-2 rounded-lg ${
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                       message.sender_id === user.id
                         ? 'bg-primary text-primary-foreground'
-                        : 'bg-accent'
+                        : 'bg-card border'
                     }`}
                   >
-                    <p>{message.message}</p>
+                    <p className="break-words">{message.message}</p>
                     <p className="text-xs opacity-70 mt-1">
                       {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
@@ -187,7 +186,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
             </div>
 
             {/* Message Input */}
-            <div className="p-4 border-t">
+            <div className="p-4 border-t bg-card rounded-br-lg">
               <div className="flex space-x-2">
                 <Input
                   placeholder="Type a message..."
@@ -196,15 +195,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   className="flex-1"
                 />
-                <Button onClick={handleSendMessage}>
+                <Button onClick={handleSendMessage} disabled={!newMessage.trim()}>
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-muted-foreground">Select a chat to start messaging</p>
+          <div className="flex-1 flex items-center justify-center bg-muted/10 rounded-r-lg">
+            <div className="text-center">
+              <MessageCircle className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground text-lg">Select a chat to start messaging</p>
+            </div>
           </div>
         )}
       </div>
