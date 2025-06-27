@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -223,10 +222,10 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   const channelMessages = messages.filter(msg => msg.channelId === selectedChannel?.id);
 
   return (
-    <div className="flex h-full">
-      {/* Channel List */}
-      <div className="w-1/3 border-r">
-        <div className="p-4">
+    <div className="h-full flex bg-background">
+      {/* Channel List - Fixed width with proper spacing */}
+      <div className="w-80 border-r bg-card flex flex-col">
+        <div className="p-4 border-b">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Channels</h2>
             <Dialog open={showCreateChannel} onOpenChange={setShowCreateChannel}>
@@ -259,7 +258,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
             </Dialog>
           </div>
           
-          <div className="relative mb-4">
+          <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Search channels..."
@@ -270,53 +269,52 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
           </div>
         </div>
         
-        <div className="space-y-1">
+        {/* Channel List with proper spacing */}
+        <div className="flex-1 overflow-y-auto">
           {filteredChannels.map((channel) => (
             <div
               key={channel.id}
               onClick={() => setSelectedChannel(channel)}
-              className={`flex items-center p-3 hover:bg-accent cursor-pointer ${
+              className={`flex items-center p-4 hover:bg-accent cursor-pointer border-b transition-colors ${
                 selectedChannel?.id === channel.id ? 'bg-accent' : ''
               }`}
             >
-              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg">
+              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mr-3">
                 <Users className="h-6 w-6 text-primary" />
               </div>
               
-              <div className="ml-3 flex-1">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-medium">{channel.name}</h3>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-center mb-1">
+                  <h3 className="font-medium text-sm truncate">{channel.name}</h3>
                   {channel.lastMessage && (
                     <span className="text-xs text-muted-foreground">
                       {channel.lastMessage.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
                 </div>
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-muted-foreground truncate">
-                    {channel.lastMessage?.message || channel.description}
-                  </p>
-                  <span className="text-xs text-muted-foreground">
-                    {channel.memberCount} members
-                  </span>
-                </div>
+                <p className="text-xs text-muted-foreground truncate mb-1">
+                  {channel.lastMessage?.message || channel.description}
+                </p>
+                <span className="text-xs text-muted-foreground">
+                  {channel.memberCount} members
+                </span>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Channel Chat Area */}
-      <div className="flex-1 flex flex-col">
+      {/* Channel Chat Area - Flexible width */}
+      <div className="flex-1 flex flex-col bg-card">
         {selectedChannel ? (
           <>
             {/* Channel Header */}
             <div className="p-4 border-b flex items-center justify-between">
               <div className="flex items-center">
-                <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-lg">
+                <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-lg mr-3">
                   <Users className="h-5 w-5 text-primary" />
                 </div>
-                <div className="ml-3">
+                <div>
                   <h3 className="font-medium">{selectedChannel.name}</h3>
                   <p className="text-sm text-muted-foreground">
                     {selectedChannel.memberCount} members • {selectedChannel.description}
@@ -386,7 +384,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/10">
               {channelMessages.map((message) => (
                 <div key={message.id} className="flex items-start space-x-3">
                   <Avatar className="h-8 w-8">
@@ -432,8 +430,11 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-muted-foreground">Select a channel to start messaging</p>
+          <div className="flex-1 flex items-center justify-center bg-muted/10">
+            <div className="text-center">
+              <Users className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground text-lg">Select a channel to start messaging</p>
+            </div>
           </div>
         )}
       </div>
