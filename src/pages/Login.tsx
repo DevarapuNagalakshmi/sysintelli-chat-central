@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Zap } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (email: string, password: string) => void;
@@ -65,7 +65,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">SysIntelli</CardTitle>
+          <div className="flex items-center justify-center space-x-2 mb-2">
+            <div className="relative">
+              <Zap className="h-8 w-8 text-blue-600 fill-blue-600" />
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
+            </div>
+            <CardTitle className="text-2xl font-bold">SysIntelli</CardTitle>
+          </div>
           <CardDescription>Let's Connect...</CardDescription>
         </CardHeader>
         <CardContent>

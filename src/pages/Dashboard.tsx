@@ -66,11 +66,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             </Button>
           </div>
           <div className="hidden sm:block">
-            <h1 className="text-xl font-semibold">Company Communication Hub</h1>
+            <h1 className="text-xl font-semibold">Let's Connect...</h1>
             <p className="text-sm text-muted-foreground">Welcome back, {user.name}</p>
           </div>
           <div className="sm:hidden">
-            <h1 className="text-lg font-semibold">Communication Hub</h1>
+            <h1 className="text-lg font-semibold">Let's Connect...</h1>
             <p className="text-xs text-muted-foreground">Welcome, {user.name}</p>
           </div>
         </div>
