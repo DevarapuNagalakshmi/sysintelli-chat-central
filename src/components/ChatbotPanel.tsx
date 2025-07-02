@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +27,7 @@ const ChatbotPanel: React.FC<ChatbotPanelProps> = ({ user }) => {
     {
       id: '1',
       sender: 'bot',
-      message: 'Hello! I\'m Sysintelli, your company assistant. I can help you with company policies, procedures, and general information. How can I assist you today?',
+      message: 'Hello! I\'m SysIntelli, your company assistant. I can help you with company policies, procedures, and general information. How can I assist you today?',
       timestamp: new Date()
     }
   ]);
@@ -107,7 +106,7 @@ const ChatbotPanel: React.FC<ChatbotPanelProps> = ({ user }) => {
         <CardHeader className="border-b">
           <CardTitle className="flex items-center">
             <Bot className="h-6 w-6 mr-2 text-primary" />
-            Sysintelli Chatbot
+            SysIntelli Chatbot
             <span className="ml-2 text-sm font-normal text-muted-foreground">
               Your AI Company Assistant
             </span>

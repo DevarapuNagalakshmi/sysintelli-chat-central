@@ -39,8 +39,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-          <CardDescription>Sign in to your company communication hub</CardDescription>
+          <CardTitle className="text-2xl font-bold">SysIntelli</CardTitle>
+          <CardDescription>let's connect</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -81,6 +81,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   {showPassword ? <EyeOff /> : <Eye />}
                 </button>
               </div>
+            </div>
+            
+            <div className="text-right">
+              <a href="#" className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                Forgot Password?
+              </a>
             </div>
             
             <Button type="submit" className="w-full" disabled={isLoading}>

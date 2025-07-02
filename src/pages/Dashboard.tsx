@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -135,7 +134,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-12 sm:h-14 text-xs sm:text-sm"
           >
             <Bot className="h-4 w-4 sm:h-6 sm:w-6 mb-1" />
-            <span className="font-medium">Sysintelli</span>
+            <span className="font-medium">SysIntelli</span>
           </Button>
         </div>
       </div>

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Mail, Phone, FileText, Save, X } from 'lucide-react';
+import { User, Mail, Phone, FileText, Save, X, Camera } from 'lucide-react';
 
 interface User {
   id: string;
@@ -36,6 +36,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onClose }) => {
     setIsEditing(false);
   };
 
+  const handlePhotoChange = () => {
+    // This would typically open a file picker or photo upload dialog
+    console.log('Photo change requested');
+    // For now, just a placeholder action
+  };
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
@@ -48,13 +54,22 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onClose }) => {
         
         <div className="space-y-6">
           {/* Avatar */}
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center space-y-2">
             <Avatar className="h-24 w-24">
               <AvatarImage src={editedUser.avatar} />
               <AvatarFallback className="text-2xl">
                 {editedUser.name.charAt(0)}
               </AvatarFallback>
             </Avatar>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handlePhotoChange}
+              className="flex items-center space-x-1"
+            >
+              <Camera className="h-4 w-4" />
+              <span>Change Photo</span>
+            </Button>
           </div>
 
           {/* Form Fields */}
