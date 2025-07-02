@@ -46,6 +46,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
+      {/* Drag region for Electron */}
+      <div className="drag-region h-8 bg-background border-b" />
+      
       {/* Top Header - Fixed height */}
       <div className="flex items-center justify-between p-4 border-b bg-background z-10 flex-shrink-0">
         <div className="flex items-center space-x-4">
