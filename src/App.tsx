@@ -49,14 +49,11 @@ const App = () => {
     setIsAuthenticated(false);
   };
 
-  // Check if running in Electron
-  const isElectron = typeof window !== 'undefined' && window.electronAPI;
-
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <TooltipProvider>
-          <div className={isElectron ? 'electron-app' : ''}>
+          <div className="min-h-screen">
             <Toaster />
             <Sonner />
             

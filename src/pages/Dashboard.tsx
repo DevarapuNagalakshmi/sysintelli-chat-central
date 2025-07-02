@@ -45,11 +45,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Drag region for Electron */}
-      <div className="drag-region h-8 bg-background border-b" />
-      
-      {/* Top Header - Fixed height */}
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Top Header - Responsive */}
       <div className="flex items-center justify-between p-4 border-b bg-background z-10 flex-shrink-0">
         <div className="flex items-center space-x-4">
           <div className="flex flex-col space-y-2">
@@ -69,9 +66,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
               <Settings className="h-4 w-4" />
             </Button>
           </div>
-          <div>
+          <div className="hidden sm:block">
             <h1 className="text-xl font-semibold">Company Communication Hub</h1>
             <p className="text-sm text-muted-foreground">Welcome back, {user.name}</p>
+          </div>
+          <div className="sm:hidden">
+            <h1 className="text-lg font-semibold">Communication Hub</h1>
+            <p className="text-xs text-muted-foreground">Welcome, {user.name}</p>
           </div>
         </div>
         
@@ -80,57 +81,61 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             variant="ghost"
             size="sm"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="p-2"
           >
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
-          <Button variant="destructive" onClick={onLogout}>
+          <Button variant="destructive" size="sm" onClick={onLogout} className="hidden sm:flex">
             <LogOut className="h-4 w-4 mr-2" />
             Logout
+          </Button>
+          <Button variant="destructive" size="sm" onClick={onLogout} className="sm:hidden p-2">
+            <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Main Content Area - Flexible height with proper spacing */}
-      <div className="flex-1 overflow-hidden" style={{ paddingBottom: '80px' }}>
+      {/* Main Content Area - Responsive with proper spacing */}
+      <div className="flex-1 overflow-hidden pb-20 sm:pb-24">
         <div className="h-full overflow-y-auto">
           {renderContent()}
         </div>
       </div>
 
-      {/* Bottom Taskbar - Fixed position with proper height */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-20" style={{ height: '80px' }}>
-        <div className="flex justify-around items-center h-full max-w-6xl mx-auto px-4">
+      {/* Bottom Navigation - Responsive */}
+      <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-20">
+        <div className="flex justify-around items-center h-16 sm:h-20 max-w-6xl mx-auto px-2 sm:px-4">
           <Button
             variant={activeTab === 'chats' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('chats')}
-            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-14"
+            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-12 sm:h-14 text-xs sm:text-sm"
           >
-            <MessageCircle className="h-6 w-6 mb-1" />
-            <span className="text-xs font-medium">Chats</span>
+            <MessageCircle className="h-4 w-4 sm:h-6 sm:w-6 mb-1" />
+            <span className="font-medium">Chats</span>
           </Button>
           <Button
             variant={activeTab === 'channels' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('channels')}
-            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-14"
+            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-12 sm:h-14 text-xs sm:text-sm"
           >
-            <Users className="h-6 w-6 mb-1" />
-            <span className="text-xs font-medium">Channels</span>
+            <Users className="h-4 w-4 sm:h-6 sm:w-6 mb-1" />
+            <span className="font-medium">Channels</span>
           </Button>
           <Button
             variant={activeTab === 'meetings' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('meetings')}
-            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-14"
+            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-12 sm:h-14 text-xs sm:text-sm"
           >
-            <Video className="h-6 w-6 mb-1" />
-            <span className="text-xs font-medium">Meetings</span>
+            <Video className="h-4 w-4 sm:h-6 sm:w-6 mb-1" />
+            <span className="font-medium">Meetings</span>
           </Button>
           <Button
             variant={activeTab === 'sysintelli' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('sysintelli')}
-            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-14"
+            className="flex-1 mx-1 flex flex-col items-center justify-center py-2 h-12 sm:h-14 text-xs sm:text-sm"
           >
-            <Bot className="h-6 w-6 mb-1" />
-            <span className="text-xs font-medium">Sysintelli</span>
+            <Bot className="h-4 w-4 sm:h-6 sm:w-6 mb-1" />
+            <span className="font-medium">Sysintelli</span>
           </Button>
         </div>
       </div>
