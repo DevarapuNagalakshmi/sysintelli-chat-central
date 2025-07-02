@@ -24,4 +24,5 @@ export default defineConfig(({ mode }) => ({
     outDir: "dist",
     emptyOutDir: true,
   },
+  base: "./",
 }));
