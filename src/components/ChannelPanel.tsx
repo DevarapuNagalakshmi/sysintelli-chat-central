@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Users, Settings, UserPlus, UserMinus, Copy, Send, Search } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Users, Settings, UserPlus, UserMinus, Copy, Send, Search, Building } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -23,6 +24,7 @@ interface Channel {
   memberCount: number;
   isAdmin: boolean;
   members?: User[];
+  department?: string;
   lastMessage?: {
     id: string;
     sender: string;
@@ -48,6 +50,19 @@ interface ChannelPanelProps {
   user: User;
 }
 
+const DEPARTMENTS = [
+  'General',
+  'Engineering',
+  'Marketing',
+  'Sales',
+  'HR',
+  'Finance',
+  'Customer Support',
+  'Design',
+  'Operations',
+  'Legal'
+];
+
 const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
@@ -58,8 +73,10 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   const [showAddUser, setShowAddUser] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDescription, setNewChannelDescription] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('');
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [filterDepartment, setFilterDepartment] = useState('');
   const { toast } = useToast();
 
   // Fetch available users
@@ -115,12 +132,23 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
           .select('*', { count: 'exact', head: true })
           .eq('channel_id', channel.id);
 
+        // Get last message
+        const { data: lastMessage } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('channel_id', channel.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
         userChannels.push({
           id: channel.id,
           name: channel.name,
           description: channel.description || '',
           memberCount: count || 0,
           isAdmin: member.role === 'admin' || channel.created_by === user.id,
+          department: channel.description?.includes('Department:') ? 
+            channel.description.split('Department:')[1].split('|')[0].trim() : 'General',
           members: []
         });
       }
@@ -215,12 +243,14 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
     if (!newChannelName.trim()) return;
 
     try {
+      const description = `${newChannelDescription} | Department: ${selectedDepartment || 'General'}`;
+      
       // Create the channel
       const { data: newChannel, error: channelError } = await supabase
         .from('channels')
         .insert({
           name: newChannelName,
-          description: newChannelDescription,
+          description: description,
           created_by: user.id
         })
         .select()
@@ -239,11 +269,12 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
 
       if (memberError) throw memberError;
 
-      // Add to local state
+      // Add the new channel to local state
       const channelItem: Channel = {
         id: newChannel.id,
         name: newChannel.name,
-        description: newChannel.description || '',
+        description: newChannelDescription,
+        department: selectedDepartment || 'General',
         memberCount: 1,
         isAdmin: true,
         members: [user]
@@ -252,17 +283,42 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
       setChannels(prev => [...prev, channelItem]);
       setNewChannelName('');
       setNewChannelDescription('');
+      setSelectedDepartment('');
       setShowCreateChannel(false);
 
       toast({
         title: "Channel created",
-        description: `Successfully created ${newChannelName}`,
+        description: `Successfully created ${newChannelName} for ${selectedDepartment || 'General'} department`,
       });
     } catch (error: any) {
       console.error('Error creating channel:', error);
       toast({
         title: "Error",
         description: "Failed to create channel",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleJoinChannel = async (channelId: string) => {
+    try {
+      const { error } = await supabase
+        .from('channel_members')
+        .insert({
+          channel_id: channelId,
+          user_id: user.id,
+          role: 'member'
+        });
+
+      if (error) throw error;
+
+      // Refresh channels
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Error joining channel:', error);
+      toast({
+        title: "Error",
+        description: "Failed to join channel",
         variant: "destructive",
       });
     }
@@ -293,9 +349,11 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
     }
   };
 
-  const filteredChannels = channels.filter(channel => 
-    channel.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredChannels = channels.filter(channel => {
+    const matchesSearch = channel.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesDepartment = !filterDepartment || channel.department === filterDepartment;
+    return matchesSearch && matchesDepartment;
+  });
 
   const channelMessages = messages.filter(msg => msg.channelId === selectedChannel?.id);
 
@@ -328,6 +386,18 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
                     value={newChannelDescription}
                     onChange={(e) => setNewChannelDescription(e.target.value)}
                   />
+                  <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DEPARTMENTS.map((dept) => (
+                        <SelectItem key={dept} value={dept}>
+                          {dept}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button onClick={handleCreateChannel} className="w-full">
                     Create Channel
                   </Button>
@@ -336,19 +406,42 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
             </Dialog>
           </div>
           
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search channels..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+          <div className="space-y-2 mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search channels..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by Department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Departments</SelectItem>
+                {DEPARTMENTS.map((dept) => (
+                  <SelectItem key={dept} value={dept}>
+                    {dept}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         
         {/* Channel List with proper spacing */}
         <div className="flex-1 overflow-y-auto">
+          {filteredChannels.length === 0 && (
+            <div className="p-4 text-center text-muted-foreground">
+              <Building className="h-8 w-8 mx-auto mb-2" />
+              <p>No channels found</p>
+              <p className="text-xs">Create a channel to get started</p>
+            </div>
+          )}
+          
           {filteredChannels.map((channel) => (
             <div
               key={channel.id}
@@ -358,7 +451,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
               }`}
             >
               <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mr-3">
-                <Users className="h-6 w-6 text-primary" />
+                <Building className="h-6 w-6 text-primary" />
               </div>
               
               <div className="flex-1 min-w-0">
@@ -371,7 +464,12 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground truncate mb-1">
-                  {channel.lastMessage?.message || channel.description}
+                  {channel.department && (
+                    <span className="bg-secondary text-secondary-foreground px-1 rounded text-xs mr-2">
+                      {channel.department}
+                    </span>
+                  )}
+                  {channel.description?.split('|')[0].trim() || 'No description'}
                 </p>
                 <span className="text-xs text-muted-foreground">
                   {channel.memberCount} members
@@ -390,12 +488,17 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
             <div className="p-4 border-b flex items-center justify-between">
               <div className="flex items-center">
                 <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-lg mr-3">
-                  <Users className="h-5 w-5 text-primary" />
+                  <Building className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <h3 className="font-medium">{selectedChannel.name}</h3>
                   <p className="text-sm text-muted-foreground">
-                    {selectedChannel.memberCount} members • {selectedChannel.description}
+                    {selectedChannel.department && (
+                      <span className="bg-secondary text-secondary-foreground px-2 py-1 rounded text-xs mr-2">
+                        {selectedChannel.department}
+                      </span>
+                    )}
+                    {selectedChannel.memberCount} members • {selectedChannel.description?.split('|')[0].trim()}
                   </p>
                 </div>
               </div>
@@ -440,8 +543,9 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
         ) : (
           <div className="flex-1 flex items-center justify-center bg-muted/10">
             <div className="text-center">
-              <Users className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+              <Building className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground text-lg">Select a channel to start messaging</p>
+              <p className="text-sm text-muted-foreground mt-2">Or create a new channel for your department</p>
             </div>
           </div>
         )}

@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Search, MessageCircle } from 'lucide-react';
+import { Send, Search, MessageCircle, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -46,6 +45,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
   const [newMessage, setNewMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [showAllUsers, setShowAllUsers] = useState(false);
   const { toast } = useToast();
 
   // Fetch all users for potential chats
@@ -90,7 +90,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
         return;
       }
 
-      // Transform the data into the expected Chat format
       const userChats: Chat[] = [];
       
       for (const participant of chatParticipants) {
@@ -112,6 +111,15 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
             .single();
 
           if (otherUserProfile) {
+            // Get last message for this chat
+            const { data: lastMessage } = await supabase
+              .from('messages')
+              .select('*')
+              .eq('chat_id', participant.chat_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+
             userChats.push({
               id: participant.chat_id,
               user: {
@@ -120,6 +128,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
                 email: otherUserProfile.email,
                 avatar: otherUserProfile.avatar_url || ''
               },
+              lastMessage: lastMessage || undefined,
               unreadCount: 0,
               isOnline: Math.random() > 0.5 // Mock online status
             });
@@ -201,6 +210,35 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
 
   const createChatWithUser = async (otherUser: User) => {
     try {
+      // Check if chat already exists between these users
+      const { data: existingChat } = await supabase
+        .from('chat_participants')
+        .select(`
+          chat_id,
+          chats!inner(id)
+        `)
+        .eq('user_id', user.id);
+
+      if (existingChat) {
+        for (const chatParticipant of existingChat) {
+          const { data: otherParticipant } = await supabase
+            .from('chat_participants')
+            .select('user_id')
+            .eq('chat_id', chatParticipant.chat_id)
+            .eq('user_id', otherUser.id)
+            .single();
+
+          if (otherParticipant) {
+            // Chat already exists, select it
+            const existingChatItem = chats.find(c => c.id === chatParticipant.chat_id);
+            if (existingChatItem) {
+              setSelectedChat(existingChatItem);
+              return;
+            }
+          }
+        }
+      }
+
       // Create a new chat
       const { data: newChat, error: chatError } = await supabase
         .from('chats')
@@ -286,10 +324,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
       {/* Chat List - Fixed width */}
       <div className="w-80 border-r bg-card rounded-l-lg flex flex-col">
         <div className="p-4 border-b">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">Direct Messages</h2>
+            <Button
+              size="sm"
+              onClick={() => setShowAllUsers(!showAllUsers)}
+              variant="outline"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Chat
+            </Button>
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search chats or users..."
+              placeholder="Search users..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -298,68 +347,89 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
         </div>
         
         <div className="flex-1 overflow-y-auto">
-          {/* Existing Chats */}
-          {filteredChats.map((chat) => (
-            <div
-              key={chat.id}
-              onClick={() => setSelectedChat(chat)}
-              className={`flex items-center p-3 hover:bg-accent cursor-pointer border-b ${
-                selectedChat?.id === chat.id ? 'bg-accent' : ''
-              }`}
-            >
-              <div className="relative">
-                <Avatar className="h-12 w-12">
-                  <AvatarImage src={chat.user.avatar} />
-                  <AvatarFallback>{chat.user.name.charAt(0)}</AvatarFallback>
-                </Avatar>
-                {chat.isOnline && (
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-                )}
-              </div>
-              
-              <div className="ml-3 flex-1 min-w-0">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-medium truncate">{chat.user.name}</h3>
-                  {chat.lastMessage && (
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(chat.lastMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  )}
-                </div>
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-muted-foreground truncate">
-                    {chat.lastMessage?.content || 'No messages yet'}
-                  </p>
-                  {chat.unreadCount > 0 && (
-                    <span className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
-                      {chat.unreadCount}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {/* Available Users to Start Chat With */}
-          {searchTerm && availableUsers.length > 0 && (
+          {/* Show all users when "New Chat" is active */}
+          {showAllUsers && (
             <>
-              <div className="p-3 text-sm text-muted-foreground border-b">
-                Start new chat with:
+              <div className="p-3 text-sm text-muted-foreground border-b flex justify-between items-center">
+                <span>All Users - Click to start chat</span>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => setShowAllUsers(false)}
+                >
+                  Cancel
+                </Button>
               </div>
-              {availableUsers.map((user) => (
+              {(searchTerm ? availableUsers : allUsers).map((availableUser) => (
                 <div
-                  key={user.id}
-                  onClick={() => createChatWithUser(user)}
+                  key={availableUser.id}
+                  onClick={() => {
+                    createChatWithUser(availableUser);
+                    setShowAllUsers(false);
+                  }}
                   className="flex items-center p-3 hover:bg-accent cursor-pointer border-b"
                 >
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={user.avatar} />
-                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                    <AvatarImage src={availableUser.avatar} />
+                    <AvatarFallback>{availableUser.name.charAt(0)}</AvatarFallback>
                   </Avatar>
                   
                   <div className="ml-3 flex-1 min-w-0">
-                    <h3 className="font-medium truncate">{user.name}</h3>
-                    <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                    <h3 className="font-medium truncate">{availableUser.name}</h3>
+                    <p className="text-sm text-muted-foreground truncate">{availableUser.email}</p>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* Existing Chats */}
+          {!showAllUsers && (
+            <>
+              {filteredChats.length === 0 && (
+                <div className="p-4 text-center text-muted-foreground">
+                  <MessageCircle className="h-8 w-8 mx-auto mb-2" />
+                  <p>No chats yet</p>
+                  <p className="text-xs">Click "New Chat" to start messaging</p>
+                </div>
+              )}
+              {filteredChats.map((chat) => (
+                <div
+                  key={chat.id}
+                  onClick={() => setSelectedChat(chat)}
+                  className={`flex items-center p-3 hover:bg-accent cursor-pointer border-b ${
+                    selectedChat?.id === chat.id ? 'bg-accent' : ''
+                  }`}
+                >
+                  <div className="relative">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={chat.user.avatar} />
+                      <AvatarFallback>{chat.user.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    {chat.isOnline && (
+                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                    )}
+                  </div>
+                  
+                  <div className="ml-3 flex-1 min-w-0">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-medium truncate">{chat.user.name}</h3>
+                      {chat.lastMessage && (
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(chat.lastMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-muted-foreground truncate">
+                        {chat.lastMessage?.content || 'No messages yet'}
+                      </p>
+                      {chat.unreadCount > 0 && (
+                        <span className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
+                          {chat.unreadCount}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -430,6 +500,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
             <div className="text-center">
               <MessageCircle className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground text-lg">Select a chat to start messaging</p>
+              <p className="text-sm text-muted-foreground mt-2">Or click "New Chat" to start a conversation</p>
             </div>
           </div>
         )}
