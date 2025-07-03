@@ -143,8 +143,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
           content,
           sender_id,
           created_at,
-          channel_id,
-          profiles!messages_sender_id_fkey(full_name, email)
+          channel_id
         `)
         .eq('channel_id', selectedChannel.id)
         .order('created_at', { ascending: true });
@@ -154,17 +153,28 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
         return;
       }
 
-      const formattedMessages: Message[] = (channelMessages || []).map(msg => ({
-        id: msg.id,
-        sender: msg.profiles?.full_name || msg.profiles?.email.split('@')[0] || 'Unknown',
-        senderId: msg.sender_id,
-        content: msg.content,
-        created_at: msg.created_at,
-        channelId: msg.channel_id,
-        sender_profile: msg.profiles
-      }));
+      // Get sender profiles for each message
+      const messagesWithSenders = await Promise.all(
+        (channelMessages || []).map(async (msg) => {
+          const { data: senderProfile } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', msg.sender_id)
+            .single();
 
-      setMessages(formattedMessages);
+          return {
+            id: msg.id,
+            sender: senderProfile?.full_name || senderProfile?.email.split('@')[0] || 'Unknown',
+            senderId: msg.sender_id,
+            content: msg.content,
+            created_at: msg.created_at,
+            channelId: msg.channel_id,
+            sender_profile: senderProfile
+          };
+        })
+      );
+
+      setMessages(messagesWithSenders);
     };
 
     fetchMessages();

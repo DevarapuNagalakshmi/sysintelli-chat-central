@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -80,8 +81,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
         .from('chat_participants')
         .select(`
           chat_id,
-          chats!inner(id, created_at),
-          profiles!chat_participants_user_id_fkey!inner(id, full_name, email, avatar_url)
+          chats!inner(id, created_at)
         `)
         .eq('user_id', user.id);
 
@@ -98,24 +98,32 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
         const { data: otherParticipants } = await supabase
           .from('chat_participants')
           .select(`
-            profiles!chat_participants_user_id_fkey(id, full_name, email, avatar_url)
+            user_id
           `)
           .eq('chat_id', participant.chat_id)
           .neq('user_id', user.id);
 
         if (otherParticipants && otherParticipants.length > 0) {
-          const otherUser = otherParticipants[0].profiles;
-          userChats.push({
-            id: participant.chat_id,
-            user: {
-              id: otherUser.id,
-              name: otherUser.full_name || otherUser.email.split('@')[0],
-              email: otherUser.email,
-              avatar: otherUser.avatar_url || ''
-            },
-            unreadCount: 0,
-            isOnline: Math.random() > 0.5 // Mock online status
-          });
+          // Get the profile of the other user
+          const { data: otherUserProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', otherParticipants[0].user_id)
+            .single();
+
+          if (otherUserProfile) {
+            userChats.push({
+              id: participant.chat_id,
+              user: {
+                id: otherUserProfile.id,
+                name: otherUserProfile.full_name || otherUserProfile.email.split('@')[0],
+                email: otherUserProfile.email,
+                avatar: otherUserProfile.avatar_url || ''
+              },
+              unreadCount: 0,
+              isOnline: Math.random() > 0.5 // Mock online status
+            });
+          }
         }
       }
 
@@ -137,8 +145,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
           content,
           sender_id,
           created_at,
-          chat_id,
-          profiles!messages_sender_id_fkey(full_name, email)
+          chat_id
         `)
         .eq('chat_id', selectedChat.id)
         .order('created_at', { ascending: true });
@@ -148,7 +155,23 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
         return;
       }
 
-      setMessages(chatMessages || []);
+      // Get sender profiles for each message
+      const messagesWithSenders = await Promise.all(
+        (chatMessages || []).map(async (msg) => {
+          const { data: senderProfile } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', msg.sender_id)
+            .single();
+
+          return {
+            ...msg,
+            sender: senderProfile
+          };
+        })
+      );
+
+      setMessages(messagesWithSenders);
     };
 
     fetchMessages();
@@ -233,14 +256,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
           sender_id: user.id,
           chat_id: selectedChat.id
         })
-        .select(`
-          id,
-          content,
-          sender_id,
-          created_at,
-          chat_id,
-          profiles!messages_sender_id_fkey(full_name, email)
-        `)
+        .select()
         .single();
 
       if (error) throw error;
