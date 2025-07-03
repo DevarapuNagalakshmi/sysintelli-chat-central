@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -94,14 +95,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         </div>
       </div>
 
-      {/* Main Content Area - Responsive with proper spacing */}
-      <div className="flex-1 overflow-hidden pb-20 sm:pb-24">
-        <div className="h-full overflow-y-auto">
+      {/* Main Content Area - Fixed height with proper spacing for input above taskbar */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto pb-4">
           {renderContent()}
         </div>
       </div>
 
-      {/* Bottom Navigation - Responsive */}
+      {/* Bottom Navigation - Fixed positioning */}
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-20">
         <div className="flex justify-around items-center h-16 sm:h-20 max-w-6xl mx-auto px-2 sm:px-4">
           <Button

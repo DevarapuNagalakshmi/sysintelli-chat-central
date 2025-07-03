@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -5,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Users, Settings, UserPlus, UserMinus, Copy, Send, Search } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 
 interface User {
   id: string;
@@ -32,9 +35,13 @@ interface Message {
   id: string;
   sender: string;
   senderId: string;
-  message: string;
-  timestamp: Date;
+  content: string;
+  created_at: string;
   channelId: string;
+  sender_profile?: {
+    full_name: string;
+    email: string;
+  };
 }
 
 interface ChannelPanelProps {
@@ -53,166 +60,227 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   const [newChannelDescription, setNewChannelDescription] = useState('');
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const { toast } = useToast();
 
-  // Mock data - Replace with Supabase integration
+  // Fetch available users
   useEffect(() => {
-    const mockUsers: User[] = [
-      { id: '1', name: 'John Doe', email: 'john@company.com', avatar: '' },
-      { id: '2', name: 'Jane Smith', email: 'jane@company.com', avatar: '' },
-      { id: '3', name: 'Mike Johnson', email: 'mike@company.com', avatar: '' },
-      { id: '4', name: 'Sarah Wilson', email: 'sarah@company.com', avatar: '' },
-    ];
-    setAvailableUsers(mockUsers);
+    const fetchUsers = async () => {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .neq('id', user.id);
 
-    const mockChannels: Channel[] = [
-      {
-        id: '1',
-        name: 'General',
-        description: 'General company discussions',
-        memberCount: 25,
-        isAdmin: true,
-        members: mockUsers.slice(0, 2),
-        lastMessage: {
-          id: '1',
-          sender: 'John Doe',
-          message: 'Welcome everyone to the new communication platform!',
-          timestamp: new Date()
-        }
-      },
-      {
-        id: '2',
-        name: 'Development Team',
-        description: 'Development discussions and updates',
-        memberCount: 8,
-        isAdmin: false,
-        members: mockUsers.slice(0, 3),
-        lastMessage: {
-          id: '2',
-          sender: 'Jane Smith',
-          message: 'The new feature is ready for testing',
-          timestamp: new Date()
-        }
+      if (error) {
+        console.error('Error fetching users:', error);
+        return;
       }
-    ];
-    setChannels(mockChannels);
-  }, []);
 
-  const handleCreateChannel = () => {
-    if (!newChannelName.trim()) return;
+      const users: User[] = profiles.map(profile => ({
+        id: profile.id,
+        name: profile.full_name || profile.email.split('@')[0],
+        email: profile.email,
+        avatar: profile.avatar_url || ''
+      }));
 
-    const newChannel: Channel = {
-      id: Date.now().toString(),
-      name: newChannelName,
-      description: newChannelDescription,
-      memberCount: 1,
-      isAdmin: true,
-      members: [user]
+      setAvailableUsers(users);
     };
 
-    setChannels(prev => [...prev, newChannel]);
-    setNewChannelName('');
-    setNewChannelDescription('');
-    setShowCreateChannel(false);
-    
-    console.log('Creating channel in Supabase:', newChannel);
-  };
+    fetchUsers();
+  }, [user.id]);
 
-  const handleAddUsersToChannel = () => {
-    if (!selectedChannel || selectedUsers.length === 0) return;
+  // Fetch user's channels
+  useEffect(() => {
+    const fetchChannels = async () => {
+      const { data: channelMembers, error } = await supabase
+        .from('channel_members')
+        .select(`
+          role,
+          channels!inner(id, name, description, created_by, created_at)
+        `)
+        .eq('user_id', user.id);
 
-    const usersToAdd = availableUsers.filter(u => selectedUsers.includes(u.id));
-    
-    setChannels(prev => prev.map(channel => 
-      channel.id === selectedChannel.id 
-        ? {
-            ...channel,
-            members: [...(channel.members || []), ...usersToAdd],
-            memberCount: (channel.members?.length || 0) + usersToAdd.length
-          }
-        : channel
-    ));
+      if (error) {
+        console.error('Error fetching channels:', error);
+        return;
+      }
 
-    // Update selected channel
-    setSelectedChannel(prev => prev ? {
-      ...prev,
-      members: [...(prev.members || []), ...usersToAdd],
-      memberCount: (prev.members?.length || 0) + usersToAdd.length
-    } : null);
+      const userChannels: Channel[] = [];
+      
+      for (const member of channelMembers) {
+        const channel = member.channels;
+        
+        // Get member count
+        const { count } = await supabase
+          .from('channel_members')
+          .select('*', { count: 'exact', head: true })
+          .eq('channel_id', channel.id);
 
-    setSelectedUsers([]);
-    setShowAddUser(false);
-    
-    console.log('Adding users to channel in Supabase:', { channelId: selectedChannel.id, users: usersToAdd });
-  };
+        userChannels.push({
+          id: channel.id,
+          name: channel.name,
+          description: channel.description || '',
+          memberCount: count || 0,
+          isAdmin: member.role === 'admin' || channel.created_by === user.id,
+          members: []
+        });
+      }
 
-  const handleRemoveUserFromChannel = (userId: string) => {
+      setChannels(userChannels);
+    };
+
+    fetchChannels();
+  }, [user.id]);
+
+  // Fetch messages for selected channel
+  useEffect(() => {
     if (!selectedChannel) return;
 
-    setChannels(prev => prev.map(channel => 
-      channel.id === selectedChannel.id 
-        ? {
-            ...channel,
-            members: channel.members?.filter(m => m.id !== userId) || [],
-            memberCount: Math.max(0, channel.memberCount - 1)
-          }
-        : channel
-    ));
+    const fetchMessages = async () => {
+      const { data: channelMessages, error } = await supabase
+        .from('messages')
+        .select(`
+          id,
+          content,
+          sender_id,
+          created_at,
+          channel_id,
+          profiles!messages_sender_id_fkey(full_name, email)
+        `)
+        .eq('channel_id', selectedChannel.id)
+        .order('created_at', { ascending: true });
 
-    setSelectedChannel(prev => prev ? {
-      ...prev,
-      members: prev.members?.filter(m => m.id !== userId) || [],
-      memberCount: Math.max(0, prev.memberCount - 1)
-    } : null);
+      if (error) {
+        console.error('Error fetching messages:', error);
+        return;
+      }
 
-    console.log('Removing user from channel in Supabase:', { channelId: selectedChannel.id, userId });
-  };
+      const formattedMessages: Message[] = (channelMessages || []).map(msg => ({
+        id: msg.id,
+        sender: msg.profiles?.full_name || msg.profiles?.email.split('@')[0] || 'Unknown',
+        senderId: msg.sender_id,
+        content: msg.content,
+        created_at: msg.created_at,
+        channelId: msg.channel_id,
+        sender_profile: msg.profiles
+      }));
 
-  const handleCloneChannel = (channel: Channel) => {
-    const clonedChannel: Channel = {
-      ...channel,
-      id: Date.now().toString(),
-      name: `${channel.name} (Copy)`,
-      memberCount: 1,
-      isAdmin: true,
-      members: [user]
+      setMessages(formattedMessages);
     };
 
-    setChannels(prev => [...prev, clonedChannel]);
-    console.log('Cloning channel:', clonedChannel);
+    fetchMessages();
+
+    // Set up real-time subscription for channel messages
+    const channel = supabase
+      .channel('channel-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `channel_id=eq.${selectedChannel.id}`
+        },
+        (payload) => {
+          console.log('New channel message received:', payload);
+          const newMsg = payload.new as any;
+          const formattedMsg: Message = {
+            id: newMsg.id,
+            sender: 'Unknown', // Will be updated when we refetch
+            senderId: newMsg.sender_id,
+            content: newMsg.content,
+            created_at: newMsg.created_at,
+            channelId: newMsg.channel_id
+          };
+          setMessages(prev => [...prev, formattedMsg]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedChannel]);
+
+  const handleCreateChannel = async () => {
+    if (!newChannelName.trim()) return;
+
+    try {
+      // Create the channel
+      const { data: newChannel, error: channelError } = await supabase
+        .from('channels')
+        .insert({
+          name: newChannelName,
+          description: newChannelDescription,
+          created_by: user.id
+        })
+        .select()
+        .single();
+
+      if (channelError) throw channelError;
+
+      // Add the creator as an admin member
+      const { error: memberError } = await supabase
+        .from('channel_members')
+        .insert({
+          channel_id: newChannel.id,
+          user_id: user.id,
+          role: 'admin'
+        });
+
+      if (memberError) throw memberError;
+
+      // Add to local state
+      const channelItem: Channel = {
+        id: newChannel.id,
+        name: newChannel.name,
+        description: newChannel.description || '',
+        memberCount: 1,
+        isAdmin: true,
+        members: [user]
+      };
+
+      setChannels(prev => [...prev, channelItem]);
+      setNewChannelName('');
+      setNewChannelDescription('');
+      setShowCreateChannel(false);
+
+      toast({
+        title: "Channel created",
+        description: `Successfully created ${newChannelName}`,
+      });
+    } catch (error: any) {
+      console.error('Error creating channel:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create channel",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChannel) return;
 
-    const message: Message = {
-      id: Date.now().toString(),
-      sender: user.name,
-      senderId: user.id,
-      message: newMessage,
-      timestamp: new Date(),
-      channelId: selectedChannel.id
-    };
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .insert({
+          content: newMessage,
+          sender_id: user.id,
+          channel_id: selectedChannel.id
+        });
 
-    setMessages(prev => [...prev, message]);
-    
-    // Update channel's last message
-    setChannels(prev => prev.map(channel => 
-      channel.id === selectedChannel.id 
-        ? {
-            ...channel,
-            lastMessage: {
-              id: message.id,
-              sender: message.sender,
-              message: message.message,
-              timestamp: message.timestamp
-            }
-          }
-        : channel
-    ));
+      if (error) throw error;
 
-    setNewMessage('');
-    
-    console.log('Sending channel message to Supabase:', message);
+      setNewMessage('');
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send message",
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredChannels = channels.filter(channel => 
@@ -304,7 +372,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Channel Chat Area - Flexible width */}
+      {/* Channel Chat Area - Flexible width with fixed input */}
       <div className="flex-1 flex flex-col bg-card">
         {selectedChannel ? (
           <>
@@ -321,69 +389,9 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
                   </p>
                 </div>
               </div>
-              
-              {selectedChannel.isAdmin && (
-                <div className="flex space-x-2">
-                  <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <UserPlus className="h-4 w-4" />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Add Users to {selectedChannel.name}</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          {availableUsers
-                            .filter(u => !selectedChannel.members?.some(m => m.id === u.id))
-                            .map((user) => (
-                              <div key={user.id} className="flex items-center space-x-2">
-                                <input
-                                  type="checkbox"
-                                  id={user.id}
-                                  checked={selectedUsers.includes(user.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedUsers(prev => [...prev, user.id]);
-                                    } else {
-                                      setSelectedUsers(prev => prev.filter(id => id !== user.id));
-                                    }
-                                  }}
-                                />
-                                <label htmlFor={user.id} className="flex items-center space-x-2 cursor-pointer">
-                                  <Avatar className="h-6 w-6">
-                                    <AvatarImage src={user.avatar} />
-                                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                                  </Avatar>
-                                  <span>{user.name}</span>
-                                </label>
-                              </div>
-                            ))}
-                        </div>
-                        <Button onClick={handleAddUsersToChannel} className="w-full" disabled={selectedUsers.length === 0}>
-                          Add Selected Users
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                  
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleCloneChannel(selectedChannel)}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
             </div>
 
-            {/* Messages */}
+            {/* Messages - Scrollable area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/10">
               {channelMessages.map((message) => (
                 <div key={message.id} className="flex items-start space-x-3">
@@ -394,27 +402,17 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
                     <div className="flex items-center space-x-2">
                       <span className="font-medium text-sm">{message.sender}</span>
                       <span className="text-xs text-muted-foreground">
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
-                      {selectedChannel.isAdmin && message.senderId !== user.id && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveUserFromChannel(message.senderId)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <UserMinus className="h-3 w-3" />
-                        </Button>
-                      )}
                     </div>
-                    <p className="text-sm mt-1">{message.message}</p>
+                    <p className="text-sm mt-1">{message.content}</p>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Message Input */}
-            <div className="p-4 border-t">
+            {/* Message Input - Fixed at bottom above taskbar */}
+            <div className="p-4 border-t mb-16 sm:mb-20">
               <div className="flex space-x-2">
                 <Input
                   placeholder={`Message #${selectedChannel.name}`}

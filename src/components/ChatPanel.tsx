@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Send, Search, MessageCircle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 
 interface User {
   id: string;
@@ -15,10 +17,13 @@ interface User {
 interface Message {
   id: string;
   sender_id: string;
-  receiver_id: string;
-  message: string;
-  timestamp: Date;
-  read: boolean;
+  content: string;
+  created_at: string;
+  chat_id: string;
+  sender?: {
+    full_name: string;
+    email: string;
+  };
 }
 
 interface Chat {
@@ -39,49 +44,225 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const { toast } = useToast();
 
-  // Mock data - Replace with Supabase integration
+  // Fetch all users for potential chats
   useEffect(() => {
-    const mockChats: Chat[] = [
-      {
-        id: '1',
-        user: { id: '2', name: 'John Doe', email: 'john@gmail.com', avatar: '' },
-        lastMessage: { id: '1', sender_id: '2', receiver_id: user.id, message: 'Hey, how are you?', timestamp: new Date(), read: false },
-        unreadCount: 2,
-        isOnline: true
-      },
-      {
-        id: '2',
-        user: { id: '3', name: 'Jane Smith', email: 'jane@gmail.com', avatar: '' },
-        lastMessage: { id: '2', sender_id: '3', receiver_id: user.id, message: 'Can we schedule a meeting?', timestamp: new Date(), read: true },
-        unreadCount: 0,
-        isOnline: false
+    const fetchUsers = async () => {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .neq('id', user.id);
+
+      if (error) {
+        console.error('Error fetching users:', error);
+        return;
       }
-    ];
-    setChats(mockChats);
-  }, [user.id]);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedChat) return;
+      const users: User[] = profiles.map(profile => ({
+        id: profile.id,
+        name: profile.full_name || profile.email.split('@')[0],
+        email: profile.email,
+        avatar: profile.avatar_url || ''
+      }));
 
-    const message: Message = {
-      id: Date.now().toString(),
-      sender_id: user.id,
-      receiver_id: selectedChat.user.id,
-      message: newMessage,
-      timestamp: new Date(),
-      read: false
+      setAllUsers(users);
     };
 
-    setMessages(prev => [...prev, message]);
-    setNewMessage('');
-    
-    // Here you would send to Supabase
-    console.log('Sending message to Supabase:', message);
+    fetchUsers();
+  }, [user.id]);
+
+  // Fetch user's chats
+  useEffect(() => {
+    const fetchChats = async () => {
+      const { data: chatParticipants, error } = await supabase
+        .from('chat_participants')
+        .select(`
+          chat_id,
+          chats!inner(id, created_at),
+          profiles!chat_participants_user_id_fkey!inner(id, full_name, email, avatar_url)
+        `)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching chats:', error);
+        return;
+      }
+
+      // Transform the data into the expected Chat format
+      const userChats: Chat[] = [];
+      
+      for (const participant of chatParticipants) {
+        // Get other participants in this chat
+        const { data: otherParticipants } = await supabase
+          .from('chat_participants')
+          .select(`
+            profiles!chat_participants_user_id_fkey(id, full_name, email, avatar_url)
+          `)
+          .eq('chat_id', participant.chat_id)
+          .neq('user_id', user.id);
+
+        if (otherParticipants && otherParticipants.length > 0) {
+          const otherUser = otherParticipants[0].profiles;
+          userChats.push({
+            id: participant.chat_id,
+            user: {
+              id: otherUser.id,
+              name: otherUser.full_name || otherUser.email.split('@')[0],
+              email: otherUser.email,
+              avatar: otherUser.avatar_url || ''
+            },
+            unreadCount: 0,
+            isOnline: Math.random() > 0.5 // Mock online status
+          });
+        }
+      }
+
+      setChats(userChats);
+    };
+
+    fetchChats();
+  }, [user.id]);
+
+  // Fetch messages for selected chat
+  useEffect(() => {
+    if (!selectedChat) return;
+
+    const fetchMessages = async () => {
+      const { data: chatMessages, error } = await supabase
+        .from('messages')
+        .select(`
+          id,
+          content,
+          sender_id,
+          created_at,
+          chat_id,
+          profiles!messages_sender_id_fkey(full_name, email)
+        `)
+        .eq('chat_id', selectedChat.id)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching messages:', error);
+        return;
+      }
+
+      setMessages(chatMessages || []);
+    };
+
+    fetchMessages();
+
+    // Set up real-time subscription for messages
+    const channel = supabase
+      .channel('chat-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `chat_id=eq.${selectedChat.id}`
+        },
+        (payload) => {
+          console.log('New message received:', payload);
+          setMessages(prev => [...prev, payload.new as Message]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedChat]);
+
+  const createChatWithUser = async (otherUser: User) => {
+    try {
+      // Create a new chat
+      const { data: newChat, error: chatError } = await supabase
+        .from('chats')
+        .insert({})
+        .select()
+        .single();
+
+      if (chatError) throw chatError;
+
+      // Add both users as participants
+      const { error: participantError } = await supabase
+        .from('chat_participants')
+        .insert([
+          { chat_id: newChat.id, user_id: user.id },
+          { chat_id: newChat.id, user_id: otherUser.id }
+        ]);
+
+      if (participantError) throw participantError;
+
+      // Add the new chat to our chats list
+      const newChatItem: Chat = {
+        id: newChat.id,
+        user: otherUser,
+        unreadCount: 0,
+        isOnline: Math.random() > 0.5
+      };
+
+      setChats(prev => [...prev, newChatItem]);
+      setSelectedChat(newChatItem);
+
+      toast({
+        title: "Chat created",
+        description: `Started a new chat with ${otherUser.name}`,
+      });
+    } catch (error: any) {
+      console.error('Error creating chat:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create chat",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedChat) return;
+
+    try {
+      const { data: message, error } = await supabase
+        .from('messages')
+        .insert({
+          content: newMessage,
+          sender_id: user.id,
+          chat_id: selectedChat.id
+        })
+        .select(`
+          id,
+          content,
+          sender_id,
+          created_at,
+          chat_id,
+          profiles!messages_sender_id_fkey(full_name, email)
+        `)
+        .single();
+
+      if (error) throw error;
+
+      setNewMessage('');
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send message",
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredChats = chats.filter(chat => 
     chat.user.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const availableUsers = allUsers.filter(u => 
+    !chats.some(chat => chat.user.id === u.id) &&
+    u.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -92,7 +273,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search chats..."
+              placeholder="Search chats or users..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -101,6 +282,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
         </div>
         
         <div className="flex-1 overflow-y-auto">
+          {/* Existing Chats */}
           {filteredChats.map((chat) => (
             <div
               key={chat.id}
@@ -124,13 +306,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
                   <h3 className="font-medium truncate">{chat.user.name}</h3>
                   {chat.lastMessage && (
                     <span className="text-xs text-muted-foreground">
-                      {chat.lastMessage.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(chat.lastMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
                 </div>
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-muted-foreground truncate">
-                    {chat.lastMessage?.message || 'No messages yet'}
+                    {chat.lastMessage?.content || 'No messages yet'}
                   </p>
                   {chat.unreadCount > 0 && (
                     <span className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
@@ -141,10 +323,36 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
               </div>
             </div>
           ))}
+
+          {/* Available Users to Start Chat With */}
+          {searchTerm && availableUsers.length > 0 && (
+            <>
+              <div className="p-3 text-sm text-muted-foreground border-b">
+                Start new chat with:
+              </div>
+              {availableUsers.map((user) => (
+                <div
+                  key={user.id}
+                  onClick={() => createChatWithUser(user)}
+                  className="flex items-center p-3 hover:bg-accent cursor-pointer border-b"
+                >
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={user.avatar} />
+                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  
+                  <div className="ml-3 flex-1 min-w-0">
+                    <h3 className="font-medium truncate">{user.name}</h3>
+                    <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </div>
 
-      {/* Chat Area - Flexible width */}
+      {/* Chat Area - Flexible width with fixed input */}
       <div className="flex-1 flex flex-col bg-card rounded-r-lg">
         {selectedChat ? (
           <>
@@ -162,7 +370,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
               </div>
             </div>
 
-            {/* Messages */}
+            {/* Messages - Scrollable area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/10">
               {messages.map((message) => (
                 <div
@@ -176,17 +384,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
                         : 'bg-card border'
                     }`}
                   >
-                    <p className="break-words">{message.message}</p>
+                    <p className="break-words">{message.content}</p>
                     <p className="text-xs opacity-70 mt-1">
-                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Message Input */}
-            <div className="p-4 border-t bg-card rounded-br-lg">
+            {/* Message Input - Fixed at bottom above taskbar */}
+            <div className="p-4 border-t bg-card rounded-br-lg mb-16 sm:mb-20">
               <div className="flex space-x-2">
                 <Input
                   placeholder="Type a message..."
