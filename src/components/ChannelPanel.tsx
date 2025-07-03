@@ -70,139 +70,159 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   const [newMessage, setNewMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateChannel, setShowCreateChannel] = useState(false);
-  const [showAddUser, setShowAddUser] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDescription, setNewChannelDescription] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
-  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [filterDepartment, setFilterDepartment] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Fetch available users
-  useEffect(() => {
-    const fetchUsers = async () => {
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .neq('id', user.id);
-
-      if (error) {
-        console.error('Error fetching users:', error);
-        return;
-      }
-
-      const users: User[] = profiles.map(profile => ({
-        id: profile.id,
-        name: profile.full_name || profile.email.split('@')[0],
-        email: profile.email,
-        avatar: profile.avatar_url || ''
-      }));
-
-      setAvailableUsers(users);
-    };
-
-    fetchUsers();
-  }, [user.id]);
-
-  // Fetch user's channels
+  // Fetch user's channels with improved error handling
   useEffect(() => {
     const fetchChannels = async () => {
-      const { data: channelMembers, error } = await supabase
-        .from('channel_members')
-        .select(`
-          role,
-          channels!inner(id, name, description, created_by, created_at)
-        `)
-        .eq('user_id', user.id);
+      try {
+        setIsLoading(true);
+        console.log('Fetching channels for user:', user.id);
 
-      if (error) {
-        console.error('Error fetching channels:', error);
-        return;
-      }
-
-      const userChannels: Channel[] = [];
-      
-      for (const member of channelMembers) {
-        const channel = member.channels;
-        
-        // Get member count
-        const { count } = await supabase
+        // First get the user's channel memberships
+        const { data: channelMembers, error: membersError } = await supabase
           .from('channel_members')
-          .select('*', { count: 'exact', head: true })
-          .eq('channel_id', channel.id);
+          .select('channel_id, role')
+          .eq('user_id', user.id);
 
-        // Get last message
-        const { data: lastMessage } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('channel_id', channel.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+        if (membersError) {
+          console.error('Error fetching channel members:', membersError);
+          toast({
+            title: "Error",
+            description: "Failed to load channel memberships",
+            variant: "destructive",
+          });
+          return;
+        }
 
-        userChannels.push({
-          id: channel.id,
-          name: channel.name,
-          description: channel.description || '',
-          memberCount: count || 0,
-          isAdmin: member.role === 'admin' || channel.created_by === user.id,
-          department: channel.description?.includes('Department:') ? 
-            channel.description.split('Department:')[1].split('|')[0].trim() : 'General',
-          members: []
+        console.log('Channel members found:', channelMembers);
+
+        if (!channelMembers || channelMembers.length === 0) {
+          console.log('No channel memberships found');
+          setChannels([]);
+          return;
+        }
+
+        // Get channel details for each membership
+        const userChannels: Channel[] = [];
+        
+        for (const member of channelMembers) {
+          try {
+            // Get channel details
+            const { data: channelData, error: channelError } = await supabase
+              .from('channels')
+              .select('*')
+              .eq('id', member.channel_id)
+              .single();
+
+            if (channelError) {
+              console.error('Error fetching channel:', channelError);
+              continue;
+            }
+
+            if (!channelData) continue;
+
+            // Get member count
+            const { count: memberCount } = await supabase
+              .from('channel_members')
+              .select('*', { count: 'exact', head: true })
+              .eq('channel_id', channelData.id);
+
+            userChannels.push({
+              id: channelData.id,
+              name: channelData.name,
+              description: channelData.description || '',
+              memberCount: memberCount || 0,
+              isAdmin: member.role === 'admin' || channelData.created_by === user.id,
+              department: channelData.description?.includes('Department:') ? 
+                channelData.description.split('Department:')[1].split('|')[0].trim() : 'General',
+              members: []
+            });
+          } catch (error) {
+            console.error('Error processing channel:', error);
+          }
+        }
+
+        console.log('Processed channels:', userChannels);
+        setChannels(userChannels);
+      } catch (error) {
+        console.error('Error in fetchChannels:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load channels",
+          variant: "destructive",
         });
+      } finally {
+        setIsLoading(false);
       }
-
-      setChannels(userChannels);
     };
 
     fetchChannels();
-  }, [user.id]);
+  }, [user.id, toast]);
 
   // Fetch messages for selected channel
   useEffect(() => {
     if (!selectedChannel) return;
 
     const fetchMessages = async () => {
-      const { data: channelMessages, error } = await supabase
-        .from('messages')
-        .select(`
-          id,
-          content,
-          sender_id,
-          created_at,
-          channel_id
-        `)
-        .eq('channel_id', selectedChannel.id)
-        .order('created_at', { ascending: true });
+      try {
+        console.log('Fetching messages for channel:', selectedChannel.id);
 
-      if (error) {
-        console.error('Error fetching messages:', error);
-        return;
+        const { data: channelMessages, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('channel_id', selectedChannel.id)
+          .order('created_at', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching messages:', error);
+          return;
+        }
+
+        console.log('Fetched messages:', channelMessages);
+
+        // Get sender profiles for each message
+        const messagesWithSenders: Message[] = [];
+        
+        for (const msg of channelMessages || []) {
+          try {
+            const { data: senderProfile } = await supabase
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', msg.sender_id)
+              .single();
+
+            messagesWithSenders.push({
+              id: msg.id,
+              sender: senderProfile?.full_name || senderProfile?.email?.split('@')[0] || 'Unknown',
+              senderId: msg.sender_id,
+              content: msg.content,
+              created_at: msg.created_at,
+              channelId: msg.channel_id,
+              sender_profile: senderProfile || undefined
+            });
+          } catch (error) {
+            console.error('Error fetching sender profile:', error);
+            messagesWithSenders.push({
+              id: msg.id,
+              sender: 'Unknown',
+              senderId: msg.sender_id,
+              content: msg.content,
+              created_at: msg.created_at,
+              channelId: msg.channel_id
+            });
+          }
+        }
+
+        setMessages(messagesWithSenders);
+      } catch (error) {
+        console.error('Error in fetchMessages:', error);
       }
-
-      // Get sender profiles for each message
-      const messagesWithSenders = await Promise.all(
-        (channelMessages || []).map(async (msg) => {
-          const { data: senderProfile } = await supabase
-            .from('profiles')
-            .select('full_name, email')
-            .eq('id', msg.sender_id)
-            .single();
-
-          return {
-            id: msg.id,
-            sender: senderProfile?.full_name || senderProfile?.email.split('@')[0] || 'Unknown',
-            senderId: msg.sender_id,
-            content: msg.content,
-            created_at: msg.created_at,
-            channelId: msg.channel_id,
-            sender_profile: senderProfile
-          };
-        })
-      );
-
-      setMessages(messagesWithSenders);
     };
 
     fetchMessages();
@@ -223,7 +243,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
           const newMsg = payload.new as any;
           const formattedMsg: Message = {
             id: newMsg.id,
-            sender: 'Unknown', // Will be updated when we refetch
+            sender: 'Unknown',
             senderId: newMsg.sender_id,
             content: newMsg.content,
             created_at: newMsg.created_at,
@@ -300,30 +320,6 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
     }
   };
 
-  const handleJoinChannel = async (channelId: string) => {
-    try {
-      const { error } = await supabase
-        .from('channel_members')
-        .insert({
-          channel_id: channelId,
-          user_id: user.id,
-          role: 'member'
-        });
-
-      if (error) throw error;
-
-      // Refresh channels
-      window.location.reload();
-    } catch (error: any) {
-      console.error('Error joining channel:', error);
-      toast({
-        title: "Error",
-        description: "Failed to join channel",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChannel) return;
 
@@ -358,9 +354,9 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   const channelMessages = messages.filter(msg => msg.channelId === selectedChannel?.id);
 
   return (
-    <div className="h-full flex bg-background">
+    <div className="h-full flex bg-background p-4">
       {/* Channel List - Fixed width with proper spacing */}
-      <div className="w-80 border-r bg-card flex flex-col">
+      <div className="w-80 border-r bg-card flex flex-col rounded-l-lg">
         <div className="p-4 border-b">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Channels</h2>
@@ -434,54 +430,59 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
         
         {/* Channel List with proper spacing */}
         <div className="flex-1 overflow-y-auto">
-          {filteredChannels.length === 0 && (
+          {isLoading ? (
+            <div className="p-4 text-center text-muted-foreground">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+              <p>Loading channels...</p>
+            </div>
+          ) : filteredChannels.length === 0 ? (
             <div className="p-4 text-center text-muted-foreground">
               <Building className="h-8 w-8 mx-auto mb-2" />
               <p>No channels found</p>
               <p className="text-xs">Create a channel to get started</p>
             </div>
-          )}
-          
-          {filteredChannels.map((channel) => (
-            <div
-              key={channel.id}
-              onClick={() => setSelectedChannel(channel)}
-              className={`flex items-center p-4 hover:bg-accent cursor-pointer border-b transition-colors ${
-                selectedChannel?.id === channel.id ? 'bg-accent' : ''
-              }`}
-            >
-              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mr-3">
-                <Building className="h-6 w-6 text-primary" />
-              </div>
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-center mb-1">
-                  <h3 className="font-medium text-sm truncate">{channel.name}</h3>
-                  {channel.lastMessage && (
-                    <span className="text-xs text-muted-foreground">
-                      {channel.lastMessage.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  )}
+          ) : (
+            filteredChannels.map((channel) => (
+              <div
+                key={channel.id}
+                onClick={() => setSelectedChannel(channel)}
+                className={`flex items-center p-4 hover:bg-accent cursor-pointer border-b transition-colors ${
+                  selectedChannel?.id === channel.id ? 'bg-accent' : ''
+                }`}
+              >
+                <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mr-3">
+                  <Building className="h-6 w-6 text-primary" />
                 </div>
-                <p className="text-xs text-muted-foreground truncate mb-1">
-                  {channel.department && (
-                    <span className="bg-secondary text-secondary-foreground px-1 rounded text-xs mr-2">
-                      {channel.department}
-                    </span>
-                  )}
-                  {channel.description?.split('|')[0].trim() || 'No description'}
-                </p>
-                <span className="text-xs text-muted-foreground">
-                  {channel.memberCount} members
-                </span>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-center mb-1">
+                    <h3 className="font-medium text-sm truncate">{channel.name}</h3>
+                    {channel.lastMessage && (
+                      <span className="text-xs text-muted-foreground">
+                        {channel.lastMessage.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate mb-1">
+                    {channel.department && (
+                      <span className="bg-secondary text-secondary-foreground px-1 rounded text-xs mr-2">
+                        {channel.department}
+                      </span>
+                    )}
+                    {channel.description?.split('|')[0].trim() || 'No description'}
+                  </p>
+                  <span className="text-xs text-muted-foreground">
+                    {channel.memberCount} members
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
       {/* Channel Chat Area - Flexible width with fixed input */}
-      <div className="flex-1 flex flex-col bg-card">
+      <div className="flex-1 flex flex-col bg-card rounded-r-lg">
         {selectedChannel ? (
           <>
             {/* Channel Header */}
@@ -541,7 +542,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-muted/10">
+          <div className="flex-1 flex items-center justify-center bg-muted/10 rounded-r-lg">
             <div className="text-center">
               <Building className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground text-lg">Select a channel to start messaging</p>
