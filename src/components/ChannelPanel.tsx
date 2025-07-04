@@ -77,83 +77,78 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Fetch user's channels with better error handling
+  // Fetch user's channels with simplified approach to avoid RLS recursion
   useEffect(() => {
     const fetchChannels = async () => {
       try {
         setIsLoading(true);
         console.log('Fetching channels for user:', user.id);
 
-        // Get the user's channel memberships
-        const { data: channelMembers, error: membersError } = await supabase
-          .from('channel_members')
-          .select('channel_id, role')
-          .eq('user_id', user.id);
+        // Direct query to get channels where user is a member
+        const { data: userChannels, error } = await supabase
+          .from('channels')
+          .select(`
+            id,
+            name, 
+            description,
+            created_by,
+            created_at,
+            channel_members!inner(
+              user_id,
+              role
+            )
+          `)
+          .eq('channel_members.user_id', user.id);
 
-        if (membersError) {
-          console.error('Error fetching channel members:', membersError);
-          // Don't show error toast for empty results
-          if (membersError.code !== 'PGRST116') {
-            toast({
-              title: "Error",
-              description: "Failed to load channel memberships",
-              variant: "destructive",
-            });
-          }
+        if (error) {
+          console.error('Error fetching channels:', error);
           setChannels([]);
           return;
         }
 
-        console.log('Channel members found:', channelMembers);
+        console.log('Raw channel data:', userChannels);
 
-        if (!channelMembers || channelMembers.length === 0) {
-          console.log('No channel memberships found');
+        if (!userChannels || userChannels.length === 0) {
+          console.log('No channels found');
           setChannels([]);
           return;
         }
 
-        // Get channel details for each membership
-        const userChannels: Channel[] = [];
+        // Process channels
+        const processedChannels: Channel[] = [];
         
-        for (const member of channelMembers) {
+        for (const channelData of userChannels) {
           try {
-            // Get channel details
-            const { data: channelData, error: channelError } = await supabase
-              .from('channels')
-              .select('*')
-              .eq('id', member.channel_id)
-              .single();
-
-            if (channelError) {
-              console.error('Error fetching channel:', channelError);
-              continue;
-            }
-
-            if (!channelData) continue;
-
-            // Get member count
+            // Get member count for this channel
             const { count: memberCount } = await supabase
               .from('channel_members')
               .select('*', { count: 'exact', head: true })
               .eq('channel_id', channelData.id);
 
-            userChannels.push({
+            // Get user's role in this channel
+            const userMember = Array.isArray(channelData.channel_members) 
+              ? channelData.channel_members.find((m: any) => m.user_id === user.id)
+              : channelData.channel_members;
+
+            const userRole = userMember?.role || 'member';
+
+            processedChannels.push({
               id: channelData.id,
               name: channelData.name,
               description: channelData.description || '',
               memberCount: memberCount || 0,
-              isAdmin: member.role === 'admin' || channelData.created_by === user.id,
+              isAdmin: userRole === 'admin' || channelData.created_by === user.id,
               department: channelData.description?.includes('Department:') ? 
                 channelData.description.split('Department:')[1].split('|')[0].trim() : 'General',
               members: []
             });
           } catch (error) {
-            console.error('Error processing channel:', error);
+            console.error('Error processing channel:', channelData.id, error);
           }
         }
 
-        console.log('Processed channels:', userChannels);
-        setChannels(userChannels);
+        console.log('Processed channels:', processedChannels);
+        setChannels(processedChannels);
       } catch (error) {
         console.error('Error in fetchChannels:', error);
         toast({
@@ -446,7 +441,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
                 <SelectValue placeholder="Filter by Department" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Departments</SelectItem>
+                <SelectItem value="all">All Departments</SelectItem>
                 {DEPARTMENTS.map((dept) => (
                   <SelectItem key={dept} value={dept}>
                     {dept}

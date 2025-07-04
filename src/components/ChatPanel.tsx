@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Search, MessageCircle, Plus } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Plus, Users, Settings, UserPlus, UserMinus, Copy, Send, Search, MessageCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -14,24 +16,29 @@ interface User {
   avatar?: string;
 }
 
+interface Chat {
+  id: string;
+  participants: User[];
+  lastMessage?: {
+    id: string;
+    sender: string;
+    message: string;
+    timestamp: Date;
+  };
+  otherParticipant?: User;
+}
+
 interface Message {
   id: string;
-  sender_id: string;
+  sender: string;
+  senderId: string;
   content: string;
   created_at: string;
   chat_id: string;
-  sender?: {
+  sender_profile?: {
     full_name: string;
     email: string;
   };
-}
-
-interface Chat {
-  id: string;
-  user: User;
-  lastMessage?: Message;
-  unreadCount: number;
-  isOnline: boolean;
 }
 
 interface ChatPanelProps {
@@ -43,13 +50,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [showAllUsers, setShowAllUsers] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Fetch all users for potential chats
+  // Fetch all users for starting new chats
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -59,29 +65,26 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
           .select('id, full_name, email, avatar_url')
           .neq('id', user.id);
 
-        if (error) {
-          console.error('Error fetching users:', error);
-          return;
-        }
+        if (error) throw error;
 
-        const users: User[] = profiles.map(profile => ({
+        const formattedUsers: User[] = (profiles || []).map(profile => ({
           id: profile.id,
           name: profile.full_name || profile.email.split('@')[0],
           email: profile.email,
           avatar: profile.avatar_url || ''
         }));
 
-        console.log('Fetched users:', users);
-        setAllUsers(users);
+        console.log('Fetched users:', formattedUsers);
+        setUsers(formattedUsers);
       } catch (error) {
-        console.error('Error in fetchUsers:', error);
+        console.error('Error fetching users:', error);
       }
     };
 
     fetchUsers();
   }, [user.id]);
 
-  // Fetch user's existing chats
+  // Fetch user's chats
   useEffect(() => {
     const fetchChats = async () => {
       try {
@@ -90,10 +93,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
         
         const { data: chatParticipants, error } = await supabase
           .from('chat_participants')
-          .select(`
-            chat_id,
-            chats!inner(id, created_at)
-          `)
+          .select('chat_id')
           .eq('user_id', user.id);
 
         if (error) {
@@ -101,62 +101,54 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
           return;
         }
 
-        console.log('Chat participants:', chatParticipants);
+        if (!chatParticipants || chatParticipants.length === 0) {
+          setChats([]);
+          return;
+        }
+
         const userChats: Chat[] = [];
         
-        for (const participant of chatParticipants || []) {
-          // Get other participants in this chat
-          const { data: otherParticipants, error: participantError } = await supabase
-            .from('chat_participants')
-            .select('user_id')
-            .eq('chat_id', participant.chat_id)
-            .neq('user_id', user.id);
+        for (const participant of chatParticipants) {
+          try {
+            // Get all participants for this chat
+            const { data: allParticipants } = await supabase
+              .from('chat_participants')
+              .select('user_id')
+              .eq('chat_id', participant.chat_id);
 
-          if (participantError) {
-            console.error('Error fetching other participants:', participantError);
-            continue;
-          }
+            if (!allParticipants) continue;
 
-          if (otherParticipants && otherParticipants.length > 0) {
-            // Get the profile of the other user
-            const { data: otherUserProfile, error: profileError } = await supabase
+            // Get the other participant (not the current user)
+            const otherParticipantId = allParticipants.find(p => p.user_id !== user.id)?.user_id;
+            
+            if (!otherParticipantId) continue;
+
+            // Get the other participant's profile
+            const { data: otherProfile } = await supabase
               .from('profiles')
               .select('id, full_name, email, avatar_url')
-              .eq('id', otherParticipants[0].user_id)
+              .eq('id', otherParticipantId)
               .single();
 
-            if (profileError) {
-              console.error('Error fetching user profile:', profileError);
-              continue;
-            }
+            if (!otherProfile) continue;
 
-            if (otherUserProfile) {
-              // Get last message for this chat
-              const { data: lastMessage } = await supabase
-                .from('messages')
-                .select('id, content, created_at, sender_id')
-                .eq('chat_id', participant.chat_id)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+            const otherUser: User = {
+              id: otherProfile.id,
+              name: otherProfile.full_name || otherProfile.email.split('@')[0],
+              email: otherProfile.email,
+              avatar: otherProfile.avatar_url || ''
+            };
 
-              userChats.push({
-                id: participant.chat_id,
-                user: {
-                  id: otherUserProfile.id,
-                  name: otherUserProfile.full_name || otherUserProfile.email.split('@')[0],
-                  email: otherUserProfile.email,
-                  avatar: otherUserProfile.avatar_url || ''
-                },
-                lastMessage: lastMessage || undefined,
-                unreadCount: 0,
-                isOnline: Math.random() > 0.5 // Mock online status
-              });
-            }
+            userChats.push({
+              id: participant.chat_id,
+              participants: [user, otherUser],
+              otherParticipant: otherUser
+            });
+          } catch (error) {
+            console.error('Error processing chat:', error);
           }
         }
 
-        console.log('Processed chats:', userChats);
         setChats(userChats);
       } catch (error) {
         console.error('Error in fetchChats:', error);
@@ -166,7 +158,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
     };
 
     fetchChats();
-  }, [user.id]);
+  }, [user.id, user]);
 
   // Fetch messages for selected chat
   useEffect(() => {
@@ -174,40 +166,49 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
 
     const fetchMessages = async () => {
       try {
-        console.log('Fetching messages for chat:', selectedChat.id);
-        
         const { data: chatMessages, error } = await supabase
           .from('messages')
-          .select('id, content, sender_id, created_at, chat_id')
+          .select('*')
           .eq('chat_id', selectedChat.id)
           .order('created_at', { ascending: true });
 
-        if (error) {
-          console.error('Error fetching messages:', error);
-          return;
-        }
+        if (error) throw error;
 
-        console.log('Fetched messages:', chatMessages);
+        const messagesWithSenders: Message[] = [];
         
-        // Get sender profiles for each message
-        const messagesWithSenders = await Promise.all(
-          (chatMessages || []).map(async (msg) => {
+        for (const msg of chatMessages || []) {
+          try {
             const { data: senderProfile } = await supabase
               .from('profiles')
               .select('full_name, email')
               .eq('id', msg.sender_id)
               .single();
 
-            return {
-              ...msg,
-              sender: senderProfile
-            };
-          })
-        );
+            messagesWithSenders.push({
+              id: msg.id,
+              sender: senderProfile?.full_name || senderProfile?.email?.split('@')[0] || 'Unknown',
+              senderId: msg.sender_id,
+              content: msg.content,
+              created_at: msg.created_at,
+              chat_id: msg.chat_id,
+              sender_profile: senderProfile || undefined
+            });
+          } catch (error) {
+            console.error('Error fetching sender profile:', error);
+            messagesWithSenders.push({
+              id: msg.id,
+              sender: 'Unknown',
+              senderId: msg.sender_id,
+              content: msg.content,
+              created_at: msg.created_at,
+              chat_id: msg.chat_id
+            });
+          }
+        }
 
         setMessages(messagesWithSenders);
       } catch (error) {
-        console.error('Error in fetchMessages:', error);
+        console.error('Error fetching messages:', error);
       }
     };
 
@@ -224,16 +225,27 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
           table: 'messages',
           filter: `chat_id=eq.${selectedChat.id}`
         },
-        (payload) => {
-          console.log('New message received:', payload);
+        async (payload) => {
           const newMsg = payload.new as any;
-          setMessages(prev => [...prev, {
+          
+          // Get sender profile for real-time message
+          const { data: senderProfile } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', newMsg.sender_id)
+            .single();
+
+          const formattedMsg: Message = {
             id: newMsg.id,
-            sender_id: newMsg.sender_id,
+            sender: senderProfile?.full_name || senderProfile?.email?.split('@')[0] || 'Unknown',
+            senderId: newMsg.sender_id,
             content: newMsg.content,
             created_at: newMsg.created_at,
-            chat_id: newMsg.chat_id
-          }]);
+            chat_id: newMsg.chat_id,
+            sender_profile: senderProfile || undefined
+          };
+          
+          setMessages(prev => [...prev, formattedMsg]);
         }
       )
       .subscribe();
@@ -247,33 +259,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
     try {
       console.log('Creating chat with user:', otherUser);
       
-      // Check if chat already exists between these users
-      const { data: existingParticipants } = await supabase
-        .from('chat_participants')
-        .select('chat_id')
-        .eq('user_id', user.id);
-
-      if (existingParticipants) {
-        for (const participant of existingParticipants) {
-          const { data: otherParticipant } = await supabase
-            .from('chat_participants')
-            .select('user_id, chat_id')
-            .eq('chat_id', participant.chat_id)
-            .eq('user_id', otherUser.id)
-            .maybeSingle();
-
-          if (otherParticipant) {
-            // Chat already exists, select it
-            const existingChatItem = chats.find(c => c.id === participant.chat_id);
-            if (existingChatItem) {
-              setSelectedChat(existingChatItem);
-              setShowAllUsers(false);
-              return;
-            }
-          }
-        }
-      }
-
       // Create a new chat
       const { data: newChat, error: chatError } = await supabase
         .from('chats')
@@ -283,33 +268,38 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
 
       if (chatError) throw chatError;
 
-      console.log('Created new chat:', newChat);
-
       // Add both users as participants
-      const { error: participantError } = await supabase
+      const { error: participant1Error } = await supabase
         .from('chat_participants')
-        .insert([
-          { chat_id: newChat.id, user_id: user.id },
-          { chat_id: newChat.id, user_id: otherUser.id }
-        ]);
+        .insert({
+          chat_id: newChat.id,
+          user_id: user.id
+        });
 
-      if (participantError) throw participantError;
+      if (participant1Error) throw participant1Error;
 
-      // Add the new chat to our chats list
-      const newChatItem: Chat = {
+      const { error: participant2Error } = await supabase
+        .from('chat_participants')
+        .insert({
+          chat_id: newChat.id,
+          user_id: otherUser.id
+        });
+
+      if (participant2Error) throw participant2Error;
+
+      // Add to local state
+      const chatItem: Chat = {
         id: newChat.id,
-        user: otherUser,
-        unreadCount: 0,
-        isOnline: Math.random() > 0.5
+        participants: [user, otherUser],
+        otherParticipant: otherUser
       };
 
-      setChats(prev => [...prev, newChatItem]);
-      setSelectedChat(newChatItem);
-      setShowAllUsers(false);
+      setChats(prev => [...prev, chatItem]);
+      setSelectedChat(chatItem);
 
       toast({
         title: "Chat created",
-        description: `Started a new chat with ${otherUser.name}`,
+        description: `Started a conversation with ${otherUser.name}`,
       });
     } catch (error: any) {
       console.error('Error creating chat:', error);
@@ -325,8 +315,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
     if (!newMessage.trim() || !selectedChat) return;
 
     try {
-      console.log('Sending message:', newMessage);
-      
       const { error } = await supabase
         .from('messages')
         .insert({
@@ -338,7 +326,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
       if (error) throw error;
 
       setNewMessage('');
-      console.log('Message sent successfully');
     } catch (error: any) {
       console.error('Error sending message:', error);
       toast({
@@ -349,39 +336,62 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
     }
   };
 
-  const filteredChats = chats.filter(chat => 
-    chat.user.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredUsers = users.filter(u => 
+    u.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    !chats.some(chat => chat.otherParticipant?.id === u.id)
   );
 
-  const availableUsers = allUsers.filter(u => 
-    !chats.some(chat => chat.user.id === u.id) &&
-    u.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const chatMessages = messages.filter(msg => msg.chat_id === selectedChat?.id);
 
   return (
     <div className="h-full flex bg-background p-4">
       {/* Chat List */}
-      <div className="w-80 border-r bg-card rounded-l-lg flex flex-col">
+      <div className="w-80 border-r bg-card flex flex-col rounded-l-lg">
         <div className="p-4 border-b">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Direct Messages</h2>
-            <Button
-              size="sm"
-              onClick={() => setShowAllUsers(!showAllUsers)}
-              variant="outline"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              New Chat
-            </Button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+            <h2 className="text-lg font-semibold">Chats</h2>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Chat
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Start New Chat</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search users..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="max-h-60 overflow-y-auto space-y-2">
+                    {filteredUsers.map((otherUser) => (
+                      <div
+                        key={otherUser.id}
+                        onClick={() => createChatWithUser(otherUser)}
+                        className="flex items-center p-3 hover:bg-accent rounded-lg cursor-pointer"
+                      >
+                        <Avatar className="h-10 w-10 mr-3">
+                          <AvatarImage src={otherUser.avatar} />
+                          <AvatarFallback>{otherUser.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{otherUser.name}</p>
+                          <p className="text-sm text-muted-foreground">{otherUser.email}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
         
@@ -391,87 +401,41 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
               <p>Loading chats...</p>
             </div>
-          ) : showAllUsers ? (
-            <>
-              <div className="p-3 text-sm text-muted-foreground border-b flex justify-between items-center">
-                <span>Start New Chat</span>
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  onClick={() => setShowAllUsers(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-              {(searchTerm ? availableUsers : allUsers).map((availableUser) => (
-                <div
-                  key={availableUser.id}
-                  onClick={() => createChatWithUser(availableUser)}
-                  className="flex items-center p-3 hover:bg-accent cursor-pointer border-b"
-                >
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={availableUser.avatar} />
-                    <AvatarFallback>{availableUser.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  
-                  <div className="ml-3 flex-1 min-w-0">
-                    <h3 className="font-medium truncate">{availableUser.name}</h3>
-                    <p className="text-sm text-muted-foreground truncate">Start conversation</p>
-                  </div>
-                </div>
-              ))}
-            </>
+          ) : chats.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground">
+              <MessageCircle className="h-8 w-8 mx-auto mb-2" />
+              <p>No chats yet</p>
+              <p className="text-xs">Start a new conversation</p>
+            </div>
           ) : (
-            <>
-              {filteredChats.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">
-                  <MessageCircle className="h-8 w-8 mx-auto mb-2" />
-                  <p>No chats yet</p>
-                  <p className="text-xs">Click "New Chat" to start messaging</p>
-                </div>
-              ) : (
-                filteredChats.map((chat) => (
-                  <div
-                    key={chat.id}
-                    onClick={() => setSelectedChat(chat)}
-                    className={`flex items-center p-3 hover:bg-accent cursor-pointer border-b ${
-                      selectedChat?.id === chat.id ? 'bg-accent' : ''
-                    }`}
-                  >
-                    <div className="relative">
-                      <Avatar className="h-12 w-12">
-                        <AvatarImage src={chat.user.avatar} />
-                        <AvatarFallback>{chat.user.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      {chat.isOnline && (
-                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-                      )}
-                    </div>
-                    
-                    <div className="ml-3 flex-1 min-w-0">
-                      <div className="flex justify-between items-center">
-                        <h3 className="font-medium truncate">{chat.user.name}</h3>
-                        {chat.lastMessage && (
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(chat.lastMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <p className="text-sm text-muted-foreground truncate">
-                          {chat.lastMessage?.content || 'No messages yet'}
-                        </p>
-                        {chat.unreadCount > 0 && (
-                          <span className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
-                            {chat.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+            chats.map((chat) => (
+              <div
+                key={chat.id}
+                onClick={() => setSelectedChat(chat)}
+                className={`flex items-center p-4 hover:bg-accent cursor-pointer border-b transition-colors ${
+                  selectedChat?.id === chat.id ? 'bg-accent' : ''
+                }`}
+              >
+                <Avatar className="h-12 w-12 mr-3">
+                  <AvatarImage src={chat.otherParticipant?.avatar} />
+                  <AvatarFallback>{chat.otherParticipant?.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-center mb-1">
+                    <h3 className="font-medium text-sm truncate">{chat.otherParticipant?.name}</h3>
+                    {chat.lastMessage && (
+                      <span className="text-xs text-muted-foreground">
+                        {chat.lastMessage.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
                   </div>
-                ))
-              )}
-            </>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {chat.lastMessage?.message || 'No messages yet'}
+                  </p>
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
@@ -481,47 +445,44 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
         {selectedChat ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b flex items-center bg-card rounded-tr-lg">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={selectedChat.user.avatar} />
-                <AvatarFallback>{selectedChat.user.name.charAt(0)}</AvatarFallback>
-              </Avatar>
-              <div className="ml-3">
-                <h3 className="font-medium">{selectedChat.user.name}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {selectedChat.isOnline ? 'Online' : 'Last seen recently'}
-                </p>
+            <div className="p-4 border-b flex items-center justify-between">
+              <div className="flex items-center">
+                <Avatar className="h-10 w-10 mr-3">
+                  <AvatarImage src={selectedChat.otherParticipant?.avatar} />
+                  <AvatarFallback>{selectedChat.otherParticipant?.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="font-medium">{selectedChat.otherParticipant?.name}</h3>
+                  <p className="text-sm text-muted-foreground">{selectedChat.otherParticipant?.email}</p>
+                </div>
               </div>
             </div>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/10">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.sender_id === user.id ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                      message.sender_id === user.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-card border'
-                    }`}
-                  >
-                    <p className="break-words">{message.content}</p>
-                    <p className="text-xs opacity-70 mt-1">
-                      {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+              {chatMessages.map((message) => (
+                <div key={message.id} className="flex items-start space-x-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback>{message.sender.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-medium text-sm">{message.sender}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-sm mt-1">{message.content}</p>
                   </div>
                 </div>
               ))}
             </div>
 
             {/* Message Input */}
-            <div className="p-4 border-t bg-card rounded-br-lg mb-16 sm:mb-20">
+            <div className="p-4 border-t mb-16 sm:mb-20">
               <div className="flex space-x-2">
                 <Input
-                  placeholder="Type a message..."
+                  placeholder={`Message ${selectedChat.otherParticipant?.name}`}
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -538,7 +499,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
             <div className="text-center">
               <MessageCircle className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground text-lg">Select a chat to start messaging</p>
-              <p className="text-sm text-muted-foreground mt-2">Or click "New Chat" to start a conversation</p>
+              <p className="text-sm text-muted-foreground mt-2">Or start a new conversation</p>
             </div>
           </div>
         )}
