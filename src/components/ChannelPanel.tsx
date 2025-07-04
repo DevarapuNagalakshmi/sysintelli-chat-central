@@ -77,14 +77,14 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Fetch user's channels with improved error handling
+  // Fetch user's channels with better error handling
   useEffect(() => {
     const fetchChannels = async () => {
       try {
         setIsLoading(true);
         console.log('Fetching channels for user:', user.id);
 
-        // First get the user's channel memberships
+        // Get the user's channel memberships
         const { data: channelMembers, error: membersError } = await supabase
           .from('channel_members')
           .select('channel_id, role')
@@ -92,11 +92,15 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
 
         if (membersError) {
           console.error('Error fetching channel members:', membersError);
-          toast({
-            title: "Error",
-            description: "Failed to load channel memberships",
-            variant: "destructive",
-          });
+          // Don't show error toast for empty results
+          if (membersError.code !== 'PGRST116') {
+            toast({
+              title: "Error",
+              description: "Failed to load channel memberships",
+              variant: "destructive",
+            });
+          }
+          setChannels([]);
           return;
         }
 
@@ -186,7 +190,6 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
 
         console.log('Fetched messages:', channelMessages);
 
-        // Get sender profiles for each message
         const messagesWithSenders: Message[] = [];
         
         for (const msg of channelMessages || []) {
@@ -238,17 +241,27 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
           table: 'messages',
           filter: `channel_id=eq.${selectedChannel.id}`
         },
-        (payload) => {
+        async (payload) => {
           console.log('New channel message received:', payload);
           const newMsg = payload.new as any;
+          
+          // Get sender profile for real-time message
+          const { data: senderProfile } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', newMsg.sender_id)
+            .single();
+
           const formattedMsg: Message = {
             id: newMsg.id,
-            sender: 'Unknown',
+            sender: senderProfile?.full_name || senderProfile?.email?.split('@')[0] || 'Unknown',
             senderId: newMsg.sender_id,
             content: newMsg.content,
             created_at: newMsg.created_at,
-            channelId: newMsg.channel_id
+            channelId: newMsg.channel_id,
+            sender_profile: senderProfile || undefined
           };
+          
           setMessages(prev => [...prev, formattedMsg]);
         }
       )
@@ -260,10 +273,21 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
   }, [selectedChannel]);
 
   const handleCreateChannel = async () => {
-    if (!newChannelName.trim()) return;
+    if (!newChannelName.trim()) {
+      toast({
+        title: "Error",
+        description: "Channel name is required",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
-      const description = `${newChannelDescription} | Department: ${selectedDepartment || 'General'}`;
+      const description = newChannelDescription ? 
+        `${newChannelDescription} | Department: ${selectedDepartment || 'General'}` : 
+        `Department: ${selectedDepartment || 'General'}`;
+      
+      console.log('Creating channel:', { name: newChannelName, description });
       
       // Create the channel
       const { data: newChannel, error: channelError } = await supabase
@@ -277,6 +301,8 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
         .single();
 
       if (channelError) throw channelError;
+
+      console.log('Channel created:', newChannel);
 
       // Add the creator as an admin member
       const { error: memberError } = await supabase
@@ -324,6 +350,8 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
     if (!newMessage.trim() || !selectedChannel) return;
 
     try {
+      console.log('Sending message to channel:', selectedChannel.id);
+      
       const { error } = await supabase
         .from('messages')
         .insert({
@@ -335,6 +363,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
       if (error) throw error;
 
       setNewMessage('');
+      console.log('Message sent successfully');
     } catch (error: any) {
       console.error('Error sending message:', error);
       toast({
@@ -355,7 +384,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
 
   return (
     <div className="h-full flex bg-background p-4">
-      {/* Channel List - Fixed width with proper spacing */}
+      {/* Channel List */}
       <div className="w-80 border-r bg-card flex flex-col rounded-l-lg">
         <div className="p-4 border-b">
           <div className="flex justify-between items-center mb-4">
@@ -378,7 +407,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
                     onChange={(e) => setNewChannelName(e.target.value)}
                   />
                   <Input
-                    placeholder="Channel description"
+                    placeholder="Channel description (optional)"
                     value={newChannelDescription}
                     onChange={(e) => setNewChannelDescription(e.target.value)}
                   />
@@ -428,7 +457,6 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
           </div>
         </div>
         
-        {/* Channel List with proper spacing */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="p-4 text-center text-muted-foreground">
@@ -481,7 +509,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Channel Chat Area - Flexible width with fixed input */}
+      {/* Channel Chat Area */}
       <div className="flex-1 flex flex-col bg-card rounded-r-lg">
         {selectedChannel ? (
           <>
@@ -505,7 +533,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
               </div>
             </div>
 
-            {/* Messages - Scrollable area */}
+            {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/10">
               {channelMessages.map((message) => (
                 <div key={message.id} className="flex items-start space-x-3">
@@ -525,7 +553,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
               ))}
             </div>
 
-            {/* Message Input - Fixed at bottom above taskbar */}
+            {/* Message Input */}
             <div className="p-4 border-t mb-16 sm:mb-20">
               <div className="flex space-x-2">
                 <Input
@@ -535,7 +563,7 @@ const ChannelPanel: React.FC<ChannelPanelProps> = ({ user }) => {
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   className="flex-1"
                 />
-                <Button onClick={handleSendMessage}>
+                <Button onClick={handleSendMessage} disabled={!newMessage.trim()}>
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
