@@ -101,9 +101,9 @@ const ChatbotPanel: React.FC<ChatbotPanelProps> = ({ user }) => {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col pb-24">
       <Card className="flex-1 flex flex-col">
-        <CardHeader className="border-b">
+        <CardHeader className="border-b flex-shrink-0">
           <CardTitle className="flex items-center">
             <Bot className="h-6 w-6 mr-2 text-primary" />
             SysIntelli Chatbot
@@ -167,25 +167,25 @@ const ChatbotPanel: React.FC<ChatbotPanelProps> = ({ user }) => {
               </div>
             )}
           </div>
-
-          {/* Message Input */}
-          <div className="p-4 border-t">
-            <div className="flex space-x-2">
-              <Input
-                placeholder="Ask me about company policies, benefits, procedures..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                className="flex-1"
-                disabled={isTyping}
-              />
-              <Button onClick={handleSendMessage} disabled={isTyping || !newMessage.trim()}>
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
+
+      {/* Fixed Message Input at Bottom */}
+      <div className="fixed bottom-16 sm:bottom-20 left-0 right-0 bg-background border-t p-4 z-10">
+        <div className="flex space-x-2 max-w-6xl mx-auto">
+          <Input
+            placeholder="Ask me about company policies, benefits, procedures..."
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            className="flex-1"
+            disabled={isTyping}
+          />
+          <Button onClick={handleSendMessage} disabled={isTyping || !newMessage.trim()}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

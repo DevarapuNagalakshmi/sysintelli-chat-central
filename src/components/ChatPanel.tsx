@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -344,7 +343,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
   const chatMessages = messages.filter(msg => msg.chat_id === selectedChat?.id);
 
   return (
-    <div className="h-full flex bg-background p-4">
+    <div className="h-full flex bg-background p-4 pb-24">
       {/* Chat List */}
       <div className="w-80 border-r bg-card flex flex-col rounded-l-lg">
         <div className="p-4 border-b">
@@ -477,22 +476,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
                 </div>
               ))}
             </div>
-
-            {/* Message Input */}
-            <div className="p-4 border-t mb-16 sm:mb-20">
-              <div className="flex space-x-2">
-                <Input
-                  placeholder={`Message ${selectedChat.otherParticipant?.name}`}
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  className="flex-1"
-                />
-                <Button onClick={handleSendMessage} disabled={!newMessage.trim()}>
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-muted/10 rounded-r-lg">
@@ -504,6 +487,24 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ user }) => {
           </div>
         )}
       </div>
+
+      {/* Fixed Message Input at Bottom */}
+      {selectedChat && (
+        <div className="fixed bottom-16 sm:bottom-20 left-0 right-0 bg-background border-t p-4 z-10">
+          <div className="flex space-x-2 max-w-6xl mx-auto">
+            <Input
+              placeholder={`Message ${selectedChat.otherParticipant?.name}`}
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              className="flex-1"
+            />
+            <Button onClick={handleSendMessage} disabled={!newMessage.trim()}>
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
