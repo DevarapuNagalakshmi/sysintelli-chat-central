@@ -44,10 +44,40 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSignUp }) => {
     return true;
   };
 
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value;
+    
+    // Auto-append @SysIntelli.com if user types just the username
+    if (value && !value.includes('@') && !value.includes('.')) {
+      // Don't auto-append while typing, just store the value
+      setEmail(value);
+    } else {
+      setEmail(value);
+    }
+    
+    if (emailError) {
+      // Validate with full email format
+      const fullEmail = value.includes('@') ? value : `${value}@SysIntelli.com`;
+      validateEmail(fullEmail);
+    }
+  };
+
+  const handleEmailBlur = () => {
+    // Auto-complete email on blur if only username is provided
+    if (email && !email.includes('@')) {
+      const fullEmail = `${email}@SysIntelli.com`;
+      setEmail(fullEmail);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent, isSignUp: boolean = false) => {
     e.preventDefault();
     
-    const isEmailValid = validateEmail(email);
+    // Ensure email has domain if not already present
+    const finalEmail = email.includes('@') ? email : `${email}@SysIntelli.com`;
+    setEmail(finalEmail);
+    
+    const isEmailValid = validateEmail(finalEmail);
     const isPasswordValid = validatePassword(password);
     
     if (!isEmailValid || !isPasswordValid) {
@@ -58,13 +88,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSignUp }) => {
     
     try {
       if (isSignUp) {
-        await onSignUp(email, password);
+        await onSignUp(finalEmail, password);
         toast({
           title: "Account created!",
           description: "Please check your email to verify your account.",
         });
       } else {
-        await onLogin(email, password);
+        await onLogin(finalEmail, password);
         toast({
           title: "Welcome back!",
           description: "You have successfully signed in.",
@@ -99,25 +129,29 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSignUp }) => {
             <TabsContent value="login">
               <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-4">
                 <div className="space-y-2">
-                  <label htmlFor="login-email" className="text-sm font-medium">SysIntelli Email Address</label>
+                  <label htmlFor="login-email" className="text-sm font-medium">SysIntelli Username</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
                       id="login-email"
-                      type="email"
-                      placeholder="your.name@SysIntelli.com"
+                      type="text"
+                      placeholder="your.name"
                       value={email}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        if (emailError) validateEmail(e.target.value);
-                      }}
+                      onChange={handleEmailChange}
+                      onBlur={handleEmailBlur}
                       className="pl-10"
                       required
                     />
+                    <span className="absolute right-3 top-3 text-sm text-gray-400">
+                      {!email.includes('@') && email ? '@SysIntelli.com' : ''}
+                    </span>
                   </div>
                   {emailError && (
                     <p className="text-sm text-red-500">{emailError}</p>
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    Enter your SysIntelli username (e.g., john.doe)
+                  </p>
                 </div>
                 
                 <div className="space-y-2">
@@ -158,25 +192,29 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSignUp }) => {
             <TabsContent value="signup">
               <form onSubmit={(e) => handleSubmit(e, true)} className="space-y-4">
                 <div className="space-y-2">
-                  <label htmlFor="signup-email" className="text-sm font-medium">SysIntelli Email Address</label>
+                  <label htmlFor="signup-email" className="text-sm font-medium">SysIntelli Username</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
                       id="signup-email"
-                      type="email"
-                      placeholder="your.name@SysIntelli.com"
+                      type="text"
+                      placeholder="your.name"
                       value={email}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        if (emailError) validateEmail(e.target.value);
-                      }}
+                      onChange={handleEmailChange}
+                      onBlur={handleEmailBlur}
                       className="pl-10"
                       required
                     />
+                    <span className="absolute right-3 top-3 text-sm text-gray-400">
+                      {!email.includes('@') && email ? '@SysIntelli.com' : ''}
+                    </span>
                   </div>
                   {emailError && (
                     <p className="text-sm text-red-500">{emailError}</p>
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    Enter your SysIntelli username (e.g., john.doe)
+                  </p>
                 </div>
                 
                 <div className="space-y-2">

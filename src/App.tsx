@@ -27,6 +27,12 @@ const App = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Function to extract name from email
+  const getNameFromEmail = (email: string) => {
+    const username = email.split('@')[0];
+    return username.replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -47,9 +53,19 @@ const App = () => {
             if (profile) {
               setUserProfile({
                 id: profile.id,
-                name: profile.full_name || profile.email.split('@')[0],
+                name: profile.full_name || getNameFromEmail(profile.email),
                 email: profile.email,
                 avatar: profile.avatar_url || '',
+                phone: '',
+                bio: ''
+              });
+            } else {
+              // Fallback if no profile found
+              setUserProfile({
+                id: session.user.id,
+                name: getNameFromEmail(session.user.email || ''),
+                email: session.user.email || '',
+                avatar: '',
                 phone: '',
                 bio: ''
               });
