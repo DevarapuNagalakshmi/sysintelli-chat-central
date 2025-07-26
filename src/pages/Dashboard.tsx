@@ -38,42 +38,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       {/* Main Content Area with Tabs */}
       <div className="flex-1 overflow-hidden">
         <Tabs defaultValue="chats" className="h-full flex flex-col">
-          {/* Tab Navigation */}
-          <div className="border-b bg-background">
-            <div className="max-w-6xl mx-auto">
-              <TabsList className="grid w-full grid-cols-4 h-14 bg-transparent rounded-none border-none">
-                <TabsTrigger 
-                  value="chats" 
-                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  <span className="hidden sm:inline">Chats</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="channels"
-                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
-                >
-                  <Users className="h-4 w-4" />
-                  <span className="hidden sm:inline">Channels</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="meetings"
-                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
-                >
-                  <Video className="h-4 w-4" />
-                  <span className="hidden sm:inline">Meetings</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="sysintelli"
-                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
-                >
-                  <Bot className="h-4 w-4" />
-                  <span className="hidden sm:inline">SysIntelli</span>
-                </TabsTrigger>
-              </TabsList>
-            </div>
-          </div>
-
           {/* Tab Content */}
           <div className="flex-1 overflow-hidden">
             <TabsContent value="chats" className="h-full m-0">
@@ -88,6 +52,42 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             <TabsContent value="sysintelli" className="h-full m-0">
               <SysIntelliPage user={user} />
             </TabsContent>
+          </div>
+
+          {/* Tab Navigation - Bottom */}
+          <div className="border-t bg-background">
+            <div className="max-w-6xl mx-auto">
+              <TabsList className="grid w-full grid-cols-4 h-14 bg-transparent rounded-none border-none">
+                <TabsTrigger 
+                  value="chats" 
+                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-t-2 data-[state=active]:border-primary rounded-none"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  <span className="hidden sm:inline">Chats</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="channels"
+                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-t-2 data-[state=active]:border-primary rounded-none"
+                >
+                  <Users className="h-4 w-4" />
+                  <span className="hidden sm:inline">Channels</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="meetings"
+                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-t-2 data-[state=active]:border-primary rounded-none"
+                >
+                  <Video className="h-4 w-4" />
+                  <span className="hidden sm:inline">Meetings</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="sysintelli"
+                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-t-2 data-[state=active]:border-primary rounded-none"
+                >
+                  <Bot className="h-4 w-4" />
+                  <span className="hidden sm:inline">SysIntelli</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
           </div>
         </Tabs>
       </div>
