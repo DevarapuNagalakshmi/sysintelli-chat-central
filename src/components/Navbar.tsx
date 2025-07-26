@@ -1,7 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Settings, LogOut, Sun, Moon } from 'lucide-react';
+import { LogOut, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
 interface User {
@@ -21,53 +20,42 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout, onProfileClick }) => {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div className="flex items-center justify-between p-4 border-b bg-background z-10 flex-shrink-0">
+    <nav className="h-16 bg-slate-900 text-white flex items-center justify-between px-6">
+      {/* Left side - App branding */}
       <div className="flex items-center space-x-4">
-        <div className="flex flex-col space-y-2">
-          <Avatar 
-            className="h-10 w-10 cursor-pointer" 
-            onClick={onProfileClick}
-          >
-            <AvatarImage src={user.avatar} />
-            <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-          </Avatar>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onProfileClick}
-            className="p-1 h-8 w-8"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
+        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+          <span className="text-white font-bold text-sm">a</span>
         </div>
-        <div className="hidden sm:block">
-          <h1 className="text-xl font-semibold">Let's Connect...</h1>
-          <p className="text-sm text-muted-foreground">Welcome back, {user.name}</p>
-        </div>
-        <div className="sm:hidden">
-          <h1 className="text-lg font-semibold">Let's Connect...</h1>
-          <p className="text-xs text-muted-foreground">Welcome, {user.name}</p>
+        <div>
+          <h1 className="text-xl font-medium text-white">Let's Connect...</h1>
+          <p className="text-sm text-slate-300">Welcome back, {user.email}</p>
         </div>
       </div>
-      
-      <div className="flex items-center space-x-2">
+
+      {/* Right side - User actions */}
+      <div className="flex items-center space-x-4">
+        {/* Theme toggle */}
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="p-2"
+          className="text-white hover:bg-slate-800"
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
-        <Button variant="destructive" size="sm" onClick={onLogout} className="hidden sm:flex">
-          <LogOut className="h-4 w-4 mr-2" />
+
+        {/* Logout button */}
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={onLogout}
+          className="bg-red-600 hover:bg-red-700 text-white"
+        >
+          <LogOut className="mr-2 h-4 w-4" />
           Logout
         </Button>
-        <Button variant="destructive" size="sm" onClick={onLogout} className="sm:hidden p-2">
-          <LogOut className="h-4 w-4" />
-        </Button>
       </div>
-    </div>
+    </nav>
   );
 };
 

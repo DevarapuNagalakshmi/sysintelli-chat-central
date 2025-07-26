@@ -27,7 +27,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [showProfile, setShowProfile] = useState(false);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-slate-900">
       {/* Navbar */}
       <Navbar 
         user={user} 
@@ -55,36 +55,36 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           </div>
 
           {/* Tab Navigation - Bottom */}
-          <div className="border-t bg-background">
+          <div className="border-t bg-slate-800">
             <div className="max-w-6xl mx-auto">
-              <TabsList className="grid w-full grid-cols-4 h-14 bg-transparent rounded-none border-none">
+              <TabsList className="grid w-full grid-cols-4 h-16 bg-slate-800 rounded-none border-none">
                 <TabsTrigger 
                   value="chats" 
-                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-t-2 data-[state=active]:border-primary rounded-none"
+                  className="flex flex-col items-center space-y-1 data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 hover:text-white rounded-md mx-1 py-2"
                 >
-                  <MessageCircle className="h-4 w-4" />
-                  <span className="hidden sm:inline">Chats</span>
+                  <MessageCircle className="h-5 w-5" />
+                  <span className="text-xs">Chats</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="channels"
-                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-t-2 data-[state=active]:border-primary rounded-none"
+                  className="flex flex-col items-center space-y-1 data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 hover:text-white rounded-md mx-1 py-2"
                 >
-                  <Users className="h-4 w-4" />
-                  <span className="hidden sm:inline">Channels</span>
+                  <Users className="h-5 w-5" />
+                  <span className="text-xs">Channels</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="meetings"
-                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-t-2 data-[state=active]:border-primary rounded-none"
+                  className="flex flex-col items-center space-y-1 data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 hover:text-white rounded-md mx-1 py-2"
                 >
-                  <Video className="h-4 w-4" />
-                  <span className="hidden sm:inline">Meetings</span>
+                  <Video className="h-5 w-5" />
+                  <span className="text-xs">Meetings</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="sysintelli"
-                  className="flex items-center space-x-2 data-[state=active]:bg-background data-[state=active]:shadow-none data-[state=active]:border-t-2 data-[state=active]:border-primary rounded-none"
+                  className="flex flex-col items-center space-y-1 data-[state=active]:bg-blue-600 data-[state=active]:text-white text-slate-400 hover:text-white rounded-md mx-1 py-2"
                 >
-                  <Bot className="h-4 w-4" />
-                  <span className="hidden sm:inline">SysIntelli</span>
+                  <Bot className="h-5 w-5" />
+                  <span className="text-xs">SysIntelli</span>
                 </TabsTrigger>
               </TabsList>
             </div>
